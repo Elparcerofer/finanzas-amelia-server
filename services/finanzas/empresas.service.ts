@@ -8,6 +8,7 @@ import {
   obtenerEmpresaPorId,
 } from '../../models/finanzas/empresa_catalogo.model';
 import { HttpError } from '../../middlewares/error.middleware';
+import { usosGlobales } from '../../models/finanzas/usos.model';
 
 export async function obtenerEmpresas(): Promise<EmpresaCatalogoFila[]> {
   return listarEmpresas();
@@ -31,6 +32,8 @@ export async function editarEmpresa(id: number, datos: EmpresaCatalogoInput): Pr
 }
 
 export async function borrarEmpresa(id: number): Promise<void> {
+  const n = await usosGlobales('empresas', id);
+  if (n > 0) throw new HttpError(409, `No se puede eliminar: está en uso en ${n} registro(s).`);
   const eliminada = await eliminarEmpresa(id);
   if (!eliminada) throw new HttpError(404, 'Empresa no encontrada');
 }

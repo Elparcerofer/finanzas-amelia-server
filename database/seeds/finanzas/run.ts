@@ -1,9 +1,12 @@
 import pool from '../../pool';
-import { seedEntidadesEmpresas } from './entidades_empresas.seed';
+import { seedEmpresas } from './entidades_empresas.seed';
+import { seedEntidadesFinancieras } from './entidades_financieras.seed';
 import { seedCategorias } from './categorias.seed';
 
 async function ejecutar(): Promise<void> {
-  await seedEntidadesEmpresas(pool);
+  const entidades = await seedEntidadesFinancieras(pool);
+  console.log(`Entidades financieras: ${entidades.insertadas} insertadas, ${entidades.actualizadas} actualizadas`);
+  await seedEmpresas(pool);
   await seedCategorias(pool);
   console.log('Seeds de finanzas aplicados correctamente');
   await pool.end();

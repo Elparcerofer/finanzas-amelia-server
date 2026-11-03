@@ -1,13 +1,19 @@
 import {
   actualizarDeudaCompleta,
+  categoriasExistentes,
+  ConsumoTarjetaFila,
   CuotaAmortizacionFila,
+  DatosConsumoDb,
   DatosCuotaDb,
   DatosDeudaDb,
   DatosTablaAmortizacionDb,
   DeudaFila,
+  diaPagoTarjeta,
+  pagaConValido,
   eliminarDeudaCompleta,
   insertarDeudaCompleta,
   listarDeudasFilas,
+  obtenerConsumosTarjeta,
   obtenerCuotas,
   obtenerDeudaFila,
   obtenerTablaVigente,
@@ -49,7 +55,34 @@ interface ParametrosAmortizacionApi {
   segDesgravamenTipo?: string;
   segDesgravamenValor?: number;
   otrosSeguros?: number;
+  /** generada = con los datos del usuario; subida = archivo del banco. */
+  origen?: 'generada' | 'subida';
 }
+
+/** Modalidad del consumo tal como la usa la app (prototipo: MODS). */
+type ModalidadConsumoApi = 'corriente' | 'dif_con' | 'dif_sin';
+
+interface ConsumoTarjetaApi {
+  id?: number;
+  fecha: string;
+  comercio: string;
+  categoriaId?: string | number | null;
+  categoriaNombre?: string | null;
+  monto: number;
+  modalidad: ModalidadConsumoApi;
+  plazo?: number;
+}
+
+const MODALIDAD_API_A_DB: Record<ModalidadConsumoApi, string> = {
+  corriente: 'corriente',
+  dif_con: 'diferido_con_intereses',
+  dif_sin: 'diferido_sin_intereses',
+};
+const MODALIDAD_DB_A_API: Record<string, ModalidadConsumoApi> = {
+  corriente: 'corriente',
+  diferido_con_intereses: 'dif_con',
+  diferido_sin_intereses: 'dif_sin',
+};
 
 interface CuotaAmortizacionApi {
   numero: number;
@@ -71,6 +104,9 @@ export interface DeudaInputApi {
   resumen?: ResumenDeudaApi | null;
   parametrosAmortizacion?: ParametrosAmortizacionApi | null;
   tablaAmortizacion?: CuotaAmortizacionApi[] | null;
+  consumos?: ConsumoTarjetaApi[] | null;
+  /** Solo suscripciones: c:<cuenta> · t:<tarjeta> · e:<entidad>. */
+  pagaCon?: string | null;
 }
 
 export interface DeudaApi {
@@ -84,6 +120,8 @@ export interface DeudaApi {
   resumen?: ResumenDeudaApi;
   parametrosAmortizacion?: ParametrosAmortizacionApi;
   tablaAmortizacion?: CuotaAmortizacionApi[];
+  consumos?: ConsumoTarjetaApi[];
+  pagaCon: string | null;
 }
 
 /** Grupo de tipos de crédito cuyo acreedor es una tarjeta (ver TipoCreditoLabel.fuente en Flutter). */
@@ -97,19 +135,124 @@ function tipoCuotaDbAApi(metodoCuota: string): string {
   return metodoCuota === 'variable' ? 'variable' : 'fija';
 }
 
-function datosParaDb(usuarioId: number, input: DeudaInputApi): { deuda: DatosDeudaDb; tabla: DatosTablaAmortizacionDb | null; cuotas: DatosCuotaDb[] } {
+type DatosParaDb = {
+  deuda: DatosDeudaDb;
+  tabla: DatosTablaAmortizacionDb | null;
+  cuotas: DatosCuotaDb[];
+  consumos: DatosConsumoDb[];
+};
+
+const r2 = (x: number) => Math.round(x * 100) / 100;
+
+const sql = (f: Date) =>
+  `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+
+/** Fecha con ese día del mes, ajustada a fin de mes (ej. 31 en abril → 30). */
+function enMes(anio: number, mes: number, dia: number): Date {
+  const ultimo = new Date(anio, mes + 1, 0).getDate();
+  return new Date(anio, mes, Math.min(dia, ultimo));
+}
+
+/** Próxima fecha (hoy o después) con ese día del mes. */
+export function proximaFechaPago(dia: number, hoy = new Date()): string {
+  const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  let f = enMes(hoy.getFullYear(), hoy.getMonth(), dia);
+  if (f < hoySinHora) f = enMes(hoy.getFullYear(), hoy.getMonth() + 1, dia);
+  return sql(f);
+}
+
+function sumarMeses(fechaSql: string, meses: number): string {
+  const [a, m, d] = fechaSql.split('-').map(Number);
+  return sql(enMes(a, m - 1 + meses, d));
+}
+
+/**
+ * Tarjeta en modo detallado (prototipo: "Consumos de la tarjeta"): la
+ * deuda es la suma de los consumos y vence en el próximo día de pago de
+ * la tarjeta (o un mes después del último consumo si no lo tiene).
+ */
+async function datosTarjetaDetallada(
+  usuarioId: number,
+  input: DeudaInputApi,
+  base: Pick<DatosDeudaDb, 'catalogoId' | 'tarjetaCreditoId' | 'alias' | 'avisoDias' | 'categoriaId' | 'tipoDeuda'>,
+): Promise<DatosParaDb> {
+  const consumosApi = input.consumos || [];
+  if (!consumosApi.length) {
+    throw new HttpError(422, 'Agrega al menos un consumo');
+  }
+
+  const idsCategoria = [...new Set(consumosApi.filter((c) => c.categoriaId).map((c) => Number(c.categoriaId)))];
+  const existentes = await categoriasExistentes(idsCategoria);
+  if (idsCategoria.some((id) => !existentes.has(id))) {
+    throw new HttpError(400, 'Una de las categorías de los consumos no existe');
+  }
+
+  const consumos: DatosConsumoDb[] = consumosApi.map((c) => ({
+    fecha: aFechaSql(c.fecha),
+    comercio: c.comercio.trim(),
+    categoriaId: c.categoriaId ? Number(c.categoriaId) : null,
+    monto: r2(c.monto),
+    modalidad: MODALIDAD_API_A_DB[c.modalidad],
+    plazo: c.modalidad === 'corriente' ? 1 : Math.max(1, Math.round(c.plazo || 1)),
+  }));
+
+  const fechas = consumos.map((c) => c.fecha).sort();
+  const total = r2(consumos.reduce((s, c) => s + c.monto, 0));
+
+  const diaPago = await diaPagoTarjeta(usuarioId, Number(input.fuenteAcreedorId));
+  if (diaPago === undefined) {
+    throw new HttpError(400, 'La tarjeta no existe o no es tuya');
+  }
+  const vencimiento = diaPago ? proximaFechaPago(diaPago) : sumarMeses(fechas[fechas.length - 1], 1);
+
+  return {
+    deuda: {
+      ...base,
+      descripcion: null,
+      montoTotal: total,
+      saldoPendiente: total,
+      tasaInteres: null,
+      fechaInicio: fechas[0],
+      fechaVencimiento: vencimiento,
+      resumenMinimo: null,
+      resumenCorte: null,
+      resumenRestantesCuotas: null,
+      pagaCon: null,
+    },
+    tabla: null,
+    cuotas: [],
+    consumos,
+  };
+}
+
+async function datosParaDb(usuarioId: number, input: DeudaInputApi): Promise<DatosParaDb> {
   const esTarjeta = TIPOS_FUENTE_TARJETA.has(input.tipo);
   const catalogoId = esTarjeta ? null : Number(input.fuenteAcreedorId);
   const tarjetaCreditoId = esTarjeta ? Number(input.fuenteAcreedorId) : null;
   const categoriaId = input.categoriaId ? Number(input.categoriaId) : null;
+
+  if (input.modo === 'detallada' && esTarjeta) {
+    return datosTarjetaDetallada(usuarioId, input, {
+      catalogoId,
+      tarjetaCreditoId,
+      alias: input.alias || null,
+      avisoDias: input.avisoDias ?? 3,
+      categoriaId,
+      tipoDeuda: input.tipo,
+    });
+  }
 
   if (input.modo === 'detallada') {
     const params = input.parametrosAmortizacion;
     if (!params) {
       throw new HttpError(422, 'parametrosAmortizacion es obligatorio cuando modo es detallada');
     }
-    const cuotasApi = input.tablaAmortizacion || [];
+    const cuotasApi = [...(input.tablaAmortizacion || [])].sort((a, b) => a.numero - b.numero);
+    if (!cuotasApi.length) {
+      throw new HttpError(422, 'Genera o sube la tabla de amortización');
+    }
     const ultimaCuota = cuotasApi[cuotasApi.length - 1];
+    const origen = params.origen === 'subida' ? 'subida' : 'generada';
 
     const deuda: DatosDeudaDb = {
       catalogoId,
@@ -120,24 +263,28 @@ function datosParaDb(usuarioId: number, input: DeudaInputApi): { deuda: DatosDeu
       avisoDias: input.avisoDias ?? 3,
       categoriaId,
       montoTotal: params.monto,
-      saldoPendiente: ultimaCuota ? ultimaCuota.saldo : params.monto,
+      // Al registrar no hay cuotas pagadas todavía: se debe todo el capital.
+      saldoPendiente: params.monto,
       tasaInteres: params.tasaAnual / 100,
       fechaInicio: aFechaSql(params.fechaInicio),
-      fechaVencimiento: aFechaSql(ultimaCuota ? ultimaCuota.fecha : params.fechaInicio),
+      fechaVencimiento: aFechaSql(ultimaCuota.fecha),
       resumenMinimo: null,
       resumenCorte: null,
       resumenRestantesCuotas: null,
+      pagaCon: null,
     };
 
     const tabla: DatosTablaAmortizacionDb = {
       montoFinanciado: params.monto,
       tasaAnualPct: params.tasaAnual,
-      plazoMeses: params.plazoMeses,
+      // Tabla del banco: el plazo es el número de cuotas del archivo.
+      plazoMeses: origen === 'subida' ? cuotasApi.length : params.plazoMeses,
       fechaInicio: aFechaSql(params.fechaInicio),
       metodoCuota: tipoCuotaApiADb(params.tipoCuota),
       segDesgravamenTipo: params.segDesgravamenTipo || 'fijo',
       segDesgravamenValor: params.segDesgravamenValor ?? 0,
       otrosSeguros: params.otrosSeguros ?? 0,
+      origen,
     };
 
     const cuotas: DatosCuotaDb[] = cuotasApi.map((c) => ({
@@ -150,7 +297,7 @@ function datosParaDb(usuarioId: number, input: DeudaInputApi): { deuda: DatosDeu
       saldo: c.saldo,
     }));
 
-    return { deuda, tabla, cuotas };
+    return { deuda, tabla, cuotas, consumos: [] };
   }
 
   const resumen = input.resumen;
@@ -175,28 +322,34 @@ function datosParaDb(usuarioId: number, input: DeudaInputApi): { deuda: DatosDeu
     resumenMinimo: resumen.minimo ?? null,
     resumenCorte: resumen.corte ? aFechaSql(resumen.corte) : null,
     resumenRestantesCuotas: resumen.restantesCuotas ?? null,
+    pagaCon: null,
   };
 
-  return { deuda, tabla: null, cuotas: [] };
+  return { deuda, tabla: null, cuotas: [], consumos: [] };
 }
 
 async function ensamblarApi(fila: DeudaFila): Promise<DeudaApi> {
   const tabla = await obtenerTablaVigente(fila.id);
+  const consumos = fila.tipo_deuda === 'tarjeta' ? await obtenerConsumosTarjeta(fila.id) : [];
 
   const base: DeudaApi = {
     id: fila.id,
     tipo: fila.tipo_deuda,
-    modo: tabla ? 'detallada' : 'resumida',
+    // `modo` no es columna: detallada si tiene tabla vigente o consumos.
+    modo: tabla || consumos.length ? 'detallada' : 'resumida',
     fuenteAcreedorId: fila.tipo_deuda === 'tarjeta' ? fila.tarjeta_credito_id : fila.catalogo_id,
     alias: fila.alias,
     avisoDias: fila.aviso_dias,
     categoriaId: fila.categoria_id,
+    pagaCon: fila.paga_con,
   };
 
   if (tabla) {
     const cuotas = await obtenerCuotas(tabla.id);
     base.parametrosAmortizacion = aParametrosApi(tabla);
     base.tablaAmortizacion = cuotas.map(aCuotaApi);
+  } else if (consumos.length) {
+    base.consumos = consumos.map(aConsumoApi);
   } else {
     base.resumen = {
       valor: Number(fila.monto_total),
@@ -223,6 +376,20 @@ function aParametrosApi(tabla: TablaAmortizacionFila): ParametrosAmortizacionApi
     segDesgravamenTipo: tabla.seg_desgravamen_tipo,
     segDesgravamenValor: Number(tabla.seg_desgravamen_valor),
     otrosSeguros: Number(tabla.otros_seguros),
+    origen: tabla.origen === 'subida' ? 'subida' : 'generada',
+  };
+}
+
+function aConsumoApi(c: ConsumoTarjetaFila): ConsumoTarjetaApi {
+  return {
+    id: c.id,
+    fecha: c.fecha_consumo,
+    comercio: c.comercio,
+    categoriaId: c.categoria_id,
+    categoriaNombre: c.categoria_nombre,
+    monto: Number(c.monto),
+    modalidad: MODALIDAD_DB_A_API[c.modalidad] || 'corriente',
+    plazo: c.plazo_meses,
   };
 }
 
@@ -251,17 +418,26 @@ export async function obtenerDeuda(usuarioId: number, id: number): Promise<Deuda
   return ensamblarApi(fila);
 }
 
+/** Valida y fija "¿Con qué se paga?" (solo suscripciones; el resto, null). */
+async function conPagaCon(usuarioId: number, input: DeudaInputApi, datos: DatosParaDb): Promise<DatosParaDb> {
+  const ref = input.tipo === 'suscripcion' ? (input.pagaCon || '').trim() : '';
+  if (ref && !(await pagaConValido(usuarioId, ref))) {
+    throw new HttpError(400, 'La cuenta, tarjeta o entidad con la que se paga no existe o no es tuya');
+  }
+  return { ...datos, deuda: { ...datos.deuda, pagaCon: ref || null } };
+}
+
 export async function registrarDeuda(usuarioId: number, input: DeudaInputApi): Promise<DeudaApi> {
-  const { deuda, tabla, cuotas } = datosParaDb(usuarioId, input);
-  const id = await insertarDeudaCompleta(usuarioId, deuda, tabla, cuotas);
+  const { deuda, tabla, cuotas, consumos } = await conPagaCon(usuarioId, input, await datosParaDb(usuarioId, input));
+  const id = await insertarDeudaCompleta(usuarioId, deuda, tabla, cuotas, consumos);
   return obtenerDeuda(usuarioId, id);
 }
 
 export async function editarDeuda(usuarioId: number, id: number, input: DeudaInputApi): Promise<DeudaApi> {
   const existente = await obtenerDeudaFila(usuarioId, id);
   if (!existente) throw new HttpError(404, 'Deuda no encontrada');
-  const { deuda, tabla, cuotas } = datosParaDb(usuarioId, input);
-  await actualizarDeudaCompleta(usuarioId, id, deuda, tabla, cuotas);
+  const { deuda, tabla, cuotas, consumos } = await conPagaCon(usuarioId, input, await datosParaDb(usuarioId, input));
+  await actualizarDeudaCompleta(usuarioId, id, deuda, tabla, cuotas, consumos);
   return obtenerDeuda(usuarioId, id);
 }
 

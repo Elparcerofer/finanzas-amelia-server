@@ -15,7 +15,9 @@ const app = express();
 app.use(helmet());
 app.use(corsMiddleware);
 app.use(morgan('dev'));
-app.use(express.json());
+// 1 MB: el logo (data URI ~128×128) y una tabla de amortización de
+// hasta 480 cuotas no caben en los 100 KB por defecto.
+app.use(express.json({ limit: '1mb' }));
 app.use(rateLimitMiddleware);
 
 app.get('/health', (_req, res) => {

@@ -8,6 +8,7 @@ import {
   obtenerCuentaPorId,
 } from '../../models/finanzas/cuenta_bancaria.model';
 import { HttpError } from '../../middlewares/error.middleware';
+import { usosPropios } from '../../models/finanzas/usos.model';
 
 export interface CuentaBancariaApi {
   id: number;
@@ -59,6 +60,8 @@ export async function editarCuenta(usuarioId: number, id: number, datos: CuentaB
 }
 
 export async function borrarCuenta(usuarioId: number, id: number): Promise<void> {
+  const n = await usosPropios(usuarioId, 'cuentas', id);
+  if (n > 0) throw new HttpError(409, `No se puede eliminar: está en uso en ${n} registro(s).`);
   const eliminada = await eliminarCuenta(usuarioId, id);
   if (!eliminada) throw new HttpError(404, 'Cuenta no encontrada');
 }

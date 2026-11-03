@@ -45,6 +45,14 @@ export async function up(pool: Pool): Promise<void> {
   await addColumnIfMissing(pool, 'tarjetas_credito', 'notas', 'VARCHAR(255) NULL');
 
   // MarcaTarjeta de Flutter incluye 'unionPay', que el CHECK original no permitía.
+  // Desde la migración 016 las marcas viven en la tabla marcas_tarjeta y el
+  // CHECK se elimina: si esa tabla ya existe no se vuelve a crear (si no,
+  // correr `npm run migrate` completo lo re-agregaría y bloquearía marcas nuevas).
+  const [mt] = await pool.query(
+    `SELECT COUNT(*) AS total FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'marcas_tarjeta'`,
+  );
+  if ((mt as { total: number }[])[0].total > 0) return;
   await ampliarCheckConstraint(
     pool,
     'tarjetas_credito',

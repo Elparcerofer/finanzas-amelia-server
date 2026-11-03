@@ -8,6 +8,7 @@ import {
   obtenerCategoriaPorId,
 } from '../../models/finanzas/categoria_finanzas.model';
 import { HttpError } from '../../middlewares/error.middleware';
+import { usosGlobales } from '../../models/finanzas/usos.model';
 
 export interface CategoriaFinanzasApi {
   id: number;
@@ -15,6 +16,7 @@ export interface CategoriaFinanzasApi {
   grupo: string | null;
   tipo: string;
   emoji: string | null;
+  color: string | null;
   notas: string | null;
 }
 
@@ -25,6 +27,7 @@ function aApi(fila: CategoriaFinanzasFila): CategoriaFinanzasApi {
     grupo: fila.grupo,
     tipo: fila.subtipo || 'sinClasificar',
     emoji: fila.emoji,
+    color: fila.color,
     notas: fila.notas,
   };
 }
@@ -48,11 +51,13 @@ export async function registrarCategoria(datos: CategoriaFinanzasInput): Promise
 export async function editarCategoria(id: number, datos: CategoriaFinanzasInput): Promise<CategoriaFinanzasApi> {
   const existente = await obtenerCategoriaPorId(id);
   if (!existente) throw new HttpError(404, 'Categoría no encontrada');
-  const fila = await actualizarCategoria(id, { ...existente, nombre: datos.nombre ?? existente.nombre, tipo: datos.tipo ?? existente.subtipo, grupo: datos.grupo ?? existente.grupo, emoji: datos.emoji ?? existente.emoji, notas: datos.notas ?? existente.notas });
+  const fila = await actualizarCategoria(id, { ...existente, nombre: datos.nombre ?? existente.nombre, tipo: datos.tipo ?? existente.subtipo, grupo: datos.grupo ?? existente.grupo, emoji: datos.emoji ?? existente.emoji, color: datos.color !== undefined ? datos.color : existente.color, notas: datos.notas ?? existente.notas });
   return aApi(fila as CategoriaFinanzasFila);
 }
 
 export async function borrarCategoria(id: number): Promise<void> {
+  const n = await usosGlobales('categorias', id);
+  if (n > 0) throw new HttpError(409, `No se puede eliminar: está en uso en ${n} registro(s).`);
   const eliminada = await eliminarCategoria(id);
   if (!eliminada) throw new HttpError(404, 'Categoría no encontrada');
 }

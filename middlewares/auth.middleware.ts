@@ -1,46 +1,39 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { tokenEsValidoEnAmelia } from '../utils/finanzas/amelia_token_validator';
+import { validarTokenEnAmelia } from '../utils/finanzas/amelia_token_validator';
 
 export interface AuthRequest extends Request {
   usuario?: { id: number };
 }
 
 /**
- * El backend principal de Amelia firma el token que la app manda en el
- * header `x-token` (no `Authorization: Bearer`, ver
- * app_http_client_finanzas.dart). Confirmado en vivo contra
- * https://amelia-test.facturadoramelia.com/api/EmpresasAmelia/login
- * (2026-10-30): el payload del JWT trae el id de usuario en el claim
- * `USU_CODIGO`.
+ * Seguridad de Finanzas = la sesión de Amelia.
  *
- * Este backend no tiene el secreto con el que Amelia firma el token
- * (no existe forma segura de obtenerlo desde aquí), así que no se
- * puede hacer jwt.verify() local. En su lugar:
- *   1. Se decodifica el payload (sin verificar firma) para leer USU_CODIGO
- *      y para rechazar rápido si ya expiró (`exp`), sin llamar a Amelia.
- *   2. Se confirma el token contra el propio Amelia (ver
- *      amelia_token_validator.ts) — si Amelia dice que no es válido,
- *      se rechaza con 401. Fail-closed: si Amelia no responde, también
- *      se rechaza (no se asume válido).
- *
- * Única excepción: en desarrollo (NODE_ENV !== 'production') una
- * petición SIN ningún token se deja pasar como "usuario de pruebas" (id 0),
- * para poder probar los endpoints a mano sin tener que loguearse en
- * Amelia cada vez. Un token presente pero inválido SIEMPRE se rechaza,
- * en cualquier ambiente.
+ * El usuario inicia sesión en Amelia (POST /api/EmpresasAmelia/login) y
+ * la app manda ese mismo token en el header `x-token` a este backend
+ * (ver app_http_client_finanzas.dart). Aquí:
+ *   1. Sin token → 401, en cualquier ambiente (ya no existe el "usuario
+ *      de pruebas" id 0 que se dejaba pasar en desarrollo).
+ *   2. Se decodifica el payload para leer el id de usuario (claim
+ *      `USU_CODIGO`) y rechazar rápido si ya expiró (`exp`).
+ *   3. Se confirma el token contra el propio Amelia (ver
+ *      amelia_token_validator.ts). Amelia sí verifica la firma, así que
+ *      si responde que el token es válido, el USU_CODIGO es auténtico.
+ *      Si Amelia no responde → 503 (no se asume válido).
  */
 export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  // Si un router ya validó esta petición (middleware global + el de la
+  // ruta), no se repite.
+  if (req.usuario) {
+    next();
+    return;
+  }
+
   const header = req.headers['x-token'];
-  const token = Array.isArray(header) ? header[0] : header;
+  const token = (Array.isArray(header) ? header[0] : header)?.trim();
 
   if (!token) {
-    if (process.env.NODE_ENV === 'production') {
-      res.status(401).json({ msg: 'Token no proporcionado' });
-      return;
-    }
-    req.usuario = { id: 0 };
-    next();
+    res.status(401).json({ msg: 'Inicia sesión en Amelia para usar Finanzas (falta el token)' });
     return;
   }
 
@@ -51,20 +44,24 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
   }
 
   if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) {
-    res.status(401).json({ msg: 'Token expirado' });
+    res.status(401).json({ msg: 'Tu sesión expiró, vuelve a iniciar sesión' });
     return;
   }
 
   const idUsuario = Number(payload.USU_CODIGO);
-  if (Number.isNaN(idUsuario) || idUsuario <= 0) {
+  if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
     res.status(401).json({ msg: 'Token sin usuario válido' });
     return;
   }
 
   try {
-    const valido = await tokenEsValidoEnAmelia(token);
-    if (!valido) {
-      res.status(401).json({ msg: 'Token no reconocido por Amelia' });
+    const resultado = await validarTokenEnAmelia(token);
+    if (resultado === 'sin_conexion') {
+      res.status(503).json({ msg: 'No se pudo validar tu sesión con Amelia; intenta en un momento' });
+      return;
+    }
+    if (resultado === 'invalido') {
+      res.status(401).json({ msg: 'Tu sesión no es válida en Amelia, vuelve a iniciar sesión' });
       return;
     }
   } catch (error) {

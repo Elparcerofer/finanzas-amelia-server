@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { logoSchema, webSchema } from '../../utils/finanzas/logo_web';
 
 export const guardarEmpresaSchema = Joi.object({
   id: Joi.alternatives(Joi.string(), Joi.number()).optional(),
@@ -6,6 +7,8 @@ export const guardarEmpresaSchema = Joi.object({
   rubro: Joi.string().max(80).allow(null, '').optional(),
   cobertura: Joi.string().max(120).allow(null, '').optional(),
   telefono: Joi.string().max(20).allow(null, '').optional(),
+  web: webSchema,
+  logo: logoSchema,
   notas: Joi.string().max(255).allow(null, '').optional(),
 });
 

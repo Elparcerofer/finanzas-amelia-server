@@ -1,5 +1,6 @@
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import pool from '../../database/pool';
+import { normalizarWeb, paraActualizar } from '../../utils/finanzas/logo_web';
 
 export interface EmpresaCatalogoFila extends RowDataPacket {
   id: number;
@@ -7,6 +8,8 @@ export interface EmpresaCatalogoFila extends RowDataPacket {
   rubro: string | null;
   cobertura: string | null;
   telefono: string | null;
+  web: string | null;
+  logo: string | null;
   notas: string | null;
 }
 
@@ -15,10 +18,12 @@ export interface EmpresaCatalogoInput {
   rubro?: string | null;
   cobertura?: string | null;
   telefono?: string | null;
+  web?: string | null;
+  logo?: string | null;
   notas?: string | null;
 }
 
-const SELECT_COLUMNAS = 'id, nombre, rubro, cobertura, telefono, notas';
+const SELECT_COLUMNAS = 'id, nombre, rubro, cobertura, telefono, web, logo, notas';
 
 export async function listarEmpresas(): Promise<EmpresaCatalogoFila[]> {
   const [rows] = await pool.query<EmpresaCatalogoFila[]>(
@@ -37,8 +42,17 @@ export async function obtenerEmpresaPorId(id: number): Promise<EmpresaCatalogoFi
 
 export async function crearEmpresa(datos: EmpresaCatalogoInput): Promise<EmpresaCatalogoFila> {
   const [result] = await pool.query<ResultSetHeader>(
-    "INSERT INTO catalogos (tipo, nombre, rubro, cobertura, telefono, notas, activo) VALUES ('empresa', ?, ?, ?, ?, ?, 1)",
-    [datos.nombre, datos.rubro || null, datos.cobertura || null, datos.telefono || null, datos.notas || null],
+    `INSERT INTO catalogos (tipo, nombre, rubro, cobertura, telefono, web, logo, notas, activo)
+     VALUES ('empresa', ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      datos.nombre,
+      datos.rubro || null,
+      datos.cobertura || null,
+      datos.telefono || null,
+      normalizarWeb(datos.web),
+      datos.logo || null,
+      datos.notas || null,
+    ],
   );
   return (await obtenerEmpresaPorId(result.insertId)) as EmpresaCatalogoFila;
 }
@@ -50,9 +64,20 @@ export async function actualizarEmpresa(id: number, datos: EmpresaCatalogoInput)
        rubro = ?,
        cobertura = ?,
        telefono = ?,
+       web = CASE WHEN ? THEN ? ELSE web END,
+       logo = CASE WHEN ? THEN ? ELSE logo END,
        notas = ?
      WHERE id = ? AND tipo = 'empresa'`,
-    [datos.nombre, datos.rubro || null, datos.cobertura || null, datos.telefono || null, datos.notas || null, id],
+    [
+      datos.nombre,
+      datos.rubro || null,
+      datos.cobertura || null,
+      datos.telefono || null,
+      ...paraActualizar(datos.web, normalizarWeb),
+      ...paraActualizar(datos.logo),
+      datos.notas || null,
+      id,
+    ],
   );
   return obtenerEmpresaPorId(id);
 }

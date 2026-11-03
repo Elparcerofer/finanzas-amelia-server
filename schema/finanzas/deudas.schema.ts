@@ -15,13 +15,28 @@ const resumenSchema = Joi.object({
 
 const parametrosAmortizacionSchema = Joi.object({
   monto: Joi.number().positive().required(),
-  tasaAnual: Joi.number().min(0).required(),
-  plazoMeses: Joi.number().integer().positive().required(),
+  // Mismos límites que los CHECK de tablas_amortizacion.
+  tasaAnual: Joi.number().min(0).max(100).required(),
+  plazoMeses: Joi.number().integer().min(1).max(480).required(),
   fechaInicio: Joi.date().iso().required(),
   tipoCuota: Joi.string().valid('fija', 'variable').optional(),
   segDesgravamenTipo: Joi.string().valid('fijo', 'porcentaje').optional(),
   segDesgravamenValor: Joi.number().min(0).optional(),
   otrosSeguros: Joi.number().min(0).optional(),
+  origen: Joi.string().valid('generada', 'subida').optional(),
+});
+
+const consumoTarjetaSchema = Joi.object({
+  id: Joi.alternatives(Joi.string(), Joi.number()).allow(null).optional(),
+  fecha: Joi.date().iso().required(),
+  comercio: Joi.string().trim().min(1).max(150).required()
+    .messages({ 'string.empty': 'Cada consumo necesita el comercio o detalle' }),
+  categoriaId: Joi.alternatives(Joi.string(), Joi.number()).allow(null, '').optional(),
+  categoriaNombre: Joi.string().allow(null, '').optional(),
+  monto: Joi.number().positive().required()
+    .messages({ 'number.positive': 'El monto de cada consumo debe ser mayor a 0' }),
+  modalidad: Joi.string().valid('corriente', 'dif_con', 'dif_sin').required(),
+  plazo: Joi.number().integer().min(1).max(48).optional(),
 });
 
 const cuotaAmortizacionSchema = Joi.object({
@@ -43,8 +58,13 @@ export const guardarDeudaSchema = Joi.object({
   avisoDias: Joi.number().integer().valid(1, 3, 5).optional(),
   categoriaId: Joi.alternatives(Joi.string(), Joi.number()).allow(null, '').optional(),
   resumen: resumenSchema.when('modo', { is: 'resumida', then: Joi.required(), otherwise: Joi.optional() }),
-  parametrosAmortizacion: parametrosAmortizacionSchema.when('modo', { is: 'detallada', then: Joi.required(), otherwise: Joi.optional() }),
-  tablaAmortizacion: Joi.array().items(cuotaAmortizacionSchema).optional(),
+  // Detallada: los préstamos llevan tabla de amortización y la tarjeta
+  // lleva consumos (el servicio exige cada caso con un mensaje claro).
+  parametrosAmortizacion: parametrosAmortizacionSchema.allow(null).optional(),
+  tablaAmortizacion: Joi.array().items(cuotaAmortizacionSchema).max(480).allow(null).optional(),
+  consumos: Joi.array().items(consumoTarjetaSchema).max(500).allow(null).optional(),
+  pagaCon: Joi.string().pattern(/^[cte]:\d+$/).allow(null, '').optional()
+    .messages({ 'string.pattern.base': 'Forma de pago no válida' }),
 });
 
 export const idParamsSchema = Joi.object({

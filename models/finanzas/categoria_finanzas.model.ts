@@ -7,6 +7,7 @@ export interface CategoriaFinanzasFila extends RowDataPacket {
   grupo: string | null;
   subtipo: string | null;
   emoji: string | null;
+  color: string | null;
   notas: string | null;
 }
 
@@ -15,10 +16,11 @@ export interface CategoriaFinanzasInput {
   grupo?: string | null;
   tipo?: string | null;
   emoji?: string | null;
+  color?: string | null;
   notas?: string | null;
 }
 
-const SELECT_COLUMNAS = 'id, nombre, grupo, subtipo, emoji, notas';
+const SELECT_COLUMNAS = 'id, nombre, grupo, subtipo, emoji, color, notas';
 
 export async function listarCategorias(): Promise<CategoriaFinanzasFila[]> {
   const [rows] = await pool.query<CategoriaFinanzasFila[]>(
@@ -37,8 +39,8 @@ export async function obtenerCategoriaPorId(id: number): Promise<CategoriaFinanz
 
 export async function crearCategoria(datos: CategoriaFinanzasInput): Promise<CategoriaFinanzasFila> {
   const [result] = await pool.query<ResultSetHeader>(
-    "INSERT INTO catalogos (tipo, nombre, grupo, subtipo, emoji, notas, activo) VALUES ('categoria', ?, ?, ?, ?, ?, 1)",
-    [datos.nombre, datos.grupo || null, datos.tipo || null, datos.emoji || null, datos.notas || null],
+    "INSERT INTO catalogos (tipo, nombre, grupo, subtipo, emoji, color, notas, activo) VALUES ('categoria', ?, ?, ?, ?, ?, ?, 1)",
+    [datos.nombre, datos.grupo || null, datos.tipo || null, datos.emoji || null, datos.color || null, datos.notas || null],
   );
   return (await obtenerCategoriaPorId(result.insertId)) as CategoriaFinanzasFila;
 }
@@ -50,9 +52,10 @@ export async function actualizarCategoria(id: number, datos: CategoriaFinanzasIn
        grupo = ?,
        subtipo = ?,
        emoji = ?,
+       color = ?,
        notas = ?
      WHERE id = ? AND tipo = 'categoria'`,
-    [datos.nombre, datos.grupo || null, datos.tipo || null, datos.emoji || null, datos.notas || null, id],
+    [datos.nombre, datos.grupo || null, datos.tipo || null, datos.emoji || null, datos.color || null, datos.notas || null, id],
   );
   return obtenerCategoriaPorId(id);
 }
