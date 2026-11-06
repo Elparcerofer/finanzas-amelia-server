@@ -57,7 +57,7 @@ export const guardarDeudaSchema = Joi.object({
   alias: Joi.string().max(150).allow(null, '').optional(),
   avisoDias: Joi.number().integer().valid(1, 3, 5).optional(),
   categoriaId: Joi.alternatives(Joi.string(), Joi.number()).allow(null, '').optional(),
-  resumen: resumenSchema.when('modo', { is: 'resumida', then: Joi.required(), otherwise: Joi.optional() }),
+  resumen: resumenSchema.when('modo', { is: 'resumida', then: Joi.required(), otherwise: Joi.allow(null).optional() }),
   // Detallada: los préstamos llevan tabla de amortización y la tarjeta
   // lleva consumos (el servicio exige cada caso con un mensaje claro).
   parametrosAmortizacion: parametrosAmortizacionSchema.allow(null).optional(),
