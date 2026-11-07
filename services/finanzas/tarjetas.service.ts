@@ -51,7 +51,7 @@ const num = (v: string | null) => (v !== null ? Number(v) : null);
 function aApi(fila: TarjetaCreditoFila): TarjetaCreditoApi {
   return {
     id: fila.id,
-    entidadId: fila.catalogo_id,
+    entidadId: fila.entidad_id,
     alias: fila.nombre,
     marca: fila.marca,
     marcaId: fila.marca_id,

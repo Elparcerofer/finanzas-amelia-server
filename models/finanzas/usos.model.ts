@@ -25,14 +25,14 @@ export async function usosGlobales(tipo: 'entidades' | 'empresas' | 'categorias'
     case 'entidades':
       return contar(
         `SELECT
-           (SELECT COUNT(*) FROM deudas WHERE catalogo_id = ?)
-         + (SELECT COUNT(*) FROM tarjetas_credito WHERE catalogo_id = ? AND activa = 1)
+           (SELECT COUNT(*) FROM deudas WHERE acreedor_id = ?)
+         + (SELECT COUNT(*) FROM tarjetas_credito WHERE entidad_id = ? AND activa = 1)
          + (SELECT COUNT(*) FROM cuentas WHERE entidad_id = ?)
          + (SELECT COUNT(*) FROM deudas WHERE paga_con = ?) AS n`,
         [id, id, id, `e:${id}`],
       );
     case 'empresas':
-      return contar('SELECT COUNT(*) AS n FROM deudas WHERE catalogo_id = ?', [id]);
+      return contar('SELECT COUNT(*) AS n FROM deudas WHERE acreedor_id = ?', [id]);
     case 'categorias':
       return contar(
         `SELECT
@@ -64,11 +64,11 @@ export async function usosPropios(usuarioId: number, tipo: 'tarjetas' | 'cuentas
 /** "N usos" de todo lo que ve el usuario en Catálogos, en una sola llamada. */
 export async function mapaUsosDelUsuario(usuarioId: number): Promise<MapaUsos> {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT 'entidades' AS tipo, catalogo_id AS id, COUNT(*) AS n
-       FROM deudas WHERE usuario_id = ? AND catalogo_id IS NOT NULL GROUP BY catalogo_id
+    `SELECT 'entidades' AS tipo, acreedor_id AS id, COUNT(*) AS n
+       FROM deudas WHERE usuario_id = ? AND acreedor_id IS NOT NULL GROUP BY acreedor_id
      UNION ALL
-     SELECT 'entidades', catalogo_id, COUNT(*) FROM tarjetas_credito
-       WHERE usuario_id = ? AND activa = 1 GROUP BY catalogo_id
+     SELECT 'entidades', entidad_id, COUNT(*) FROM tarjetas_credito
+       WHERE usuario_id = ? AND activa = 1 GROUP BY entidad_id
      UNION ALL
      SELECT 'entidades', entidad_id, COUNT(*) FROM cuentas
        WHERE usuario_id = ? AND entidad_id IS NOT NULL GROUP BY entidad_id
@@ -98,7 +98,7 @@ export async function mapaUsosDelUsuario(usuarioId: number): Promise<MapaUsos> {
     const id = String(r.id);
     mapa[tipo][id] = (mapa[tipo][id] || 0) + Number(r.n);
   }
-  // deudas.catalogo_id apunta a entidad O a empresa (según el tipo de
+  // deudas.acreedor_id apunta a entidad O a empresa (según el tipo de
   // crédito): el mismo conteo sirve para ambas pestañas; la app lo lee
   // por id y cada id existe solo en una de las dos.
   mapa.empresas = { ...mapa.entidades };

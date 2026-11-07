@@ -24,14 +24,14 @@ const SELECT_COLUMNAS = 'id, nombre, grupo, subtipo, emoji, color, notas';
 
 export async function listarCategorias(): Promise<CategoriaFinanzasFila[]> {
   const [rows] = await pool.query<CategoriaFinanzasFila[]>(
-    `SELECT ${SELECT_COLUMNAS} FROM catalogos WHERE tipo = 'categoria' AND activo = 1 ORDER BY nombre`,
+    `SELECT ${SELECT_COLUMNAS} FROM categorias WHERE activo = 1 ORDER BY nombre`,
   );
   return rows;
 }
 
 export async function obtenerCategoriaPorId(id: number): Promise<CategoriaFinanzasFila | null> {
   const [rows] = await pool.query<CategoriaFinanzasFila[]>(
-    `SELECT ${SELECT_COLUMNAS} FROM catalogos WHERE id = ? AND tipo = 'categoria'`,
+    `SELECT ${SELECT_COLUMNAS} FROM categorias WHERE id = ?`,
     [id],
   );
   return rows[0] || null;
@@ -39,7 +39,7 @@ export async function obtenerCategoriaPorId(id: number): Promise<CategoriaFinanz
 
 export async function crearCategoria(datos: CategoriaFinanzasInput): Promise<CategoriaFinanzasFila> {
   const [result] = await pool.query<ResultSetHeader>(
-    "INSERT INTO catalogos (tipo, nombre, grupo, subtipo, emoji, color, notas, activo) VALUES ('categoria', ?, ?, ?, ?, ?, ?, 1)",
+    'INSERT INTO categorias (nombre, grupo, subtipo, emoji, color, notas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)',
     [datos.nombre, datos.grupo || null, datos.tipo || null, datos.emoji || null, datos.color || null, datos.notas || null],
   );
   return (await obtenerCategoriaPorId(result.insertId)) as CategoriaFinanzasFila;
@@ -47,14 +47,14 @@ export async function crearCategoria(datos: CategoriaFinanzasInput): Promise<Cat
 
 export async function actualizarCategoria(id: number, datos: CategoriaFinanzasInput): Promise<CategoriaFinanzasFila | null> {
   await pool.query(
-    `UPDATE catalogos SET
+    `UPDATE categorias SET
        nombre = COALESCE(?, nombre),
        grupo = ?,
        subtipo = ?,
        emoji = ?,
        color = ?,
        notas = ?
-     WHERE id = ? AND tipo = 'categoria'`,
+     WHERE id = ?`,
     [datos.nombre, datos.grupo || null, datos.tipo || null, datos.emoji || null, datos.color || null, datos.notas || null, id],
   );
   return obtenerCategoriaPorId(id);
@@ -62,7 +62,7 @@ export async function actualizarCategoria(id: number, datos: CategoriaFinanzasIn
 
 export async function eliminarCategoria(id: number): Promise<boolean> {
   const [result] = await pool.query<ResultSetHeader>(
-    "UPDATE catalogos SET activo = 0 WHERE id = ? AND tipo = 'categoria'",
+    'UPDATE categorias SET activo = 0 WHERE id = ?',
     [id],
   );
   return result.affectedRows > 0;

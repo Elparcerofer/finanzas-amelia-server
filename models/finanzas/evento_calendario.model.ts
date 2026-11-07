@@ -7,6 +7,8 @@ export interface EventoCalendarioFila extends RowDataPacket {
   titulo: string;
   fecha: string;
   tipo: 'pago' | 'ingreso' | 'recordatorio';
+  /** Tabla a la que apunta referencia_id (ej. 'deuda', 'ingreso', 'pago'). */
+  referencia_tipo: string | null;
   referencia_id: number | null;
 }
 
@@ -16,6 +18,7 @@ export interface EventoCalendario {
   titulo: string;
   fecha: Date | string;
   tipo: 'pago' | 'ingreso' | 'recordatorio';
+  referencia_tipo?: string;
   referencia_id?: number;
 }
 
@@ -33,8 +36,8 @@ export async function listarEventosPorUsuario(usuarioId: number, desde?: string,
 
 export async function crearEventoCalendario(evento: EventoCalendario): Promise<EventoCalendarioFila> {
   const [result] = await pool.query<ResultSetHeader>(
-    'INSERT INTO eventos_calendario (usuario_id, titulo, fecha, tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
-    [evento.usuario_id, evento.titulo, evento.fecha, evento.tipo, evento.referencia_id || null],
+    'INSERT INTO eventos_calendario (usuario_id, titulo, fecha, tipo, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [evento.usuario_id, evento.titulo, evento.fecha, evento.tipo, evento.referencia_tipo || null, evento.referencia_id || null],
   );
   const [rows] = await pool.query<EventoCalendarioFila[]>('SELECT * FROM eventos_calendario WHERE id = ?', [result.insertId]);
   return rows[0];

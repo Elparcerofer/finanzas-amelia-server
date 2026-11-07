@@ -1,5 +1,5 @@
 import { Pool } from 'mysql2/promise';
-import { addColumnIfMissing, ampliarCheckConstraint } from './helpers';
+import { addColumnIfMissing, ampliarCheckConstraint, columnaExiste } from './helpers';
 
 /**
  * Tabla ya existente en la BD real. alias/aviso_dias/categoria_id son
@@ -45,7 +45,10 @@ export async function up(pool: Pool): Promise<void> {
   await addColumnIfMissing(pool, 'deudas', 'resumen_minimo', 'DECIMAL(12, 2) NULL');
   await addColumnIfMissing(pool, 'deudas', 'resumen_corte', 'DATE NULL');
   await addColumnIfMissing(pool, 'deudas', 'resumen_restantes_cuotas', 'SMALLINT NULL');
-  await pool.query('ALTER TABLE deudas MODIFY COLUMN catalogo_id INT NULL');
+  // Desde la migración 019 la columna se llama acreedor_id.
+  if (await columnaExiste(pool, 'deudas', 'catalogo_id')) {
+    await pool.query('ALTER TABLE deudas MODIFY COLUMN catalogo_id INT NULL');
+  }
 
   // TipoCredito de Flutter tiene 8 valores (tarjeta/consumo/capital/vehicular/
   // hipotecario/garantia/empresarial/suscripcion); el CHECK original solo

@@ -71,18 +71,18 @@ interface ConsumoTarjetaApi {
   monto: number;
   modalidad: ModalidadConsumoApi;
   plazo?: number;
+  /** Meses de gracia antes de la primera cuota (solo diferidos). */
+  mesesGracia?: number;
 }
 
-const MODALIDAD_API_A_DB: Record<ModalidadConsumoApi, string> = {
-  corriente: 'corriente',
-  dif_con: 'diferido_con_intereses',
-  dif_sin: 'diferido_sin_intereses',
-};
-const MODALIDAD_DB_A_API: Record<string, ModalidadConsumoApi> = {
-  corriente: 'corriente',
-  diferido_con_intereses: 'dif_con',
-  diferido_sin_intereses: 'dif_sin',
-};
+/**
+ * En la BD la modalidad se separa en tipo_consumo (corriente/diferido) y
+ * con_intereses; la app la sigue manejando como un solo valor.
+ */
+function modalidadApi(c: Pick<ConsumoTarjetaFila, 'tipo_consumo' | 'con_intereses'>): ModalidadConsumoApi {
+  if (c.tipo_consumo === 'corriente') return 'corriente';
+  return Number(c.con_intereses) === 1 ? 'dif_con' : 'dif_sin';
+}
 
 interface CuotaAmortizacionApi {
   numero: number;
@@ -174,27 +174,33 @@ function sumarMeses(fechaSql: string, meses: number): string {
 async function datosTarjetaDetallada(
   usuarioId: number,
   input: DeudaInputApi,
-  base: Pick<DatosDeudaDb, 'catalogoId' | 'tarjetaCreditoId' | 'alias' | 'avisoDias' | 'categoriaId' | 'tipoDeuda'>,
+  base: Pick<DatosDeudaDb, 'acreedorId' | 'tarjetaCreditoId' | 'alias' | 'avisoDias' | 'categoriaId' | 'tipoDeuda'>,
 ): Promise<DatosParaDb> {
   const consumosApi = input.consumos || [];
   if (!consumosApi.length) {
     throw new HttpError(422, 'Agrega al menos un consumo');
   }
 
-  const idsCategoria = [...new Set(consumosApi.filter((c) => c.categoriaId).map((c) => Number(c.categoriaId)))];
+  // categoria_id es obligatoria en consumos_tarjeta (el schema ya exige que venga).
+  const idsCategoria = [...new Set(consumosApi.map((c) => Number(c.categoriaId)))];
   const existentes = await categoriasExistentes(idsCategoria);
   if (idsCategoria.some((id) => !existentes.has(id))) {
     throw new HttpError(400, 'Una de las categorías de los consumos no existe');
   }
 
-  const consumos: DatosConsumoDb[] = consumosApi.map((c) => ({
-    fecha: aFechaSql(c.fecha),
-    comercio: c.comercio.trim(),
-    categoriaId: c.categoriaId ? Number(c.categoriaId) : null,
-    monto: r2(c.monto),
-    modalidad: MODALIDAD_API_A_DB[c.modalidad],
-    plazo: c.modalidad === 'corriente' ? 1 : Math.max(1, Math.round(c.plazo || 1)),
-  }));
+  const consumos: DatosConsumoDb[] = consumosApi.map((c) => {
+    const corriente = c.modalidad === 'corriente';
+    return {
+      fecha: aFechaSql(c.fecha),
+      comercio: c.comercio.trim(),
+      categoriaId: Number(c.categoriaId),
+      monto: r2(c.monto),
+      tipoConsumo: corriente ? 'corriente' : 'diferido',
+      conIntereses: c.modalidad === 'dif_con',
+      plazo: corriente ? 1 : Math.max(1, Math.round(c.plazo || 1)),
+      mesesGracia: corriente ? 0 : Math.max(0, Math.round(c.mesesGracia || 0)),
+    };
+  });
 
   const fechas = consumos.map((c) => c.fecha).sort();
   const total = r2(consumos.reduce((s, c) => s + c.monto, 0));
@@ -227,13 +233,13 @@ async function datosTarjetaDetallada(
 
 async function datosParaDb(usuarioId: number, input: DeudaInputApi): Promise<DatosParaDb> {
   const esTarjeta = TIPOS_FUENTE_TARJETA.has(input.tipo);
-  const catalogoId = esTarjeta ? null : Number(input.fuenteAcreedorId);
+  const acreedorId = esTarjeta ? null : Number(input.fuenteAcreedorId);
   const tarjetaCreditoId = esTarjeta ? Number(input.fuenteAcreedorId) : null;
   const categoriaId = input.categoriaId ? Number(input.categoriaId) : null;
 
   if (input.modo === 'detallada' && esTarjeta) {
     return datosTarjetaDetallada(usuarioId, input, {
-      catalogoId,
+      acreedorId,
       tarjetaCreditoId,
       alias: input.alias || null,
       avisoDias: input.avisoDias ?? 3,
@@ -255,7 +261,7 @@ async function datosParaDb(usuarioId: number, input: DeudaInputApi): Promise<Dat
     const origen = params.origen === 'subida' ? 'subida' : 'generada';
 
     const deuda: DatosDeudaDb = {
-      catalogoId,
+      acreedorId,
       tarjetaCreditoId,
       descripcion: null,
       tipoDeuda: input.tipo,
@@ -307,7 +313,7 @@ async function datosParaDb(usuarioId: number, input: DeudaInputApi): Promise<Dat
 
   const hoy = new Date().toISOString().slice(0, 10);
   const deuda: DatosDeudaDb = {
-    catalogoId,
+    acreedorId,
     tarjetaCreditoId,
     descripcion: resumen.nota || null,
     tipoDeuda: input.tipo,
@@ -337,7 +343,7 @@ async function ensamblarApi(fila: DeudaFila): Promise<DeudaApi> {
     tipo: fila.tipo_deuda,
     // `modo` no es columna: detallada si tiene tabla vigente o consumos.
     modo: tabla || consumos.length ? 'detallada' : 'resumida',
-    fuenteAcreedorId: fila.tipo_deuda === 'tarjeta' ? fila.tarjeta_credito_id : fila.catalogo_id,
+    fuenteAcreedorId: fila.tipo_deuda === 'tarjeta' ? fila.tarjeta_credito_id : fila.acreedor_id,
     alias: fila.alias,
     avisoDias: fila.aviso_dias,
     categoriaId: fila.categoria_id,
@@ -388,8 +394,9 @@ function aConsumoApi(c: ConsumoTarjetaFila): ConsumoTarjetaApi {
     categoriaId: c.categoria_id,
     categoriaNombre: c.categoria_nombre,
     monto: Number(c.monto),
-    modalidad: MODALIDAD_DB_A_API[c.modalidad] || 'corriente',
+    modalidad: modalidadApi(c),
     plazo: c.plazo_meses,
+    mesesGracia: c.meses_gracia,
   };
 }
 
@@ -442,6 +449,9 @@ export async function editarDeuda(usuarioId: number, id: number, input: DeudaInp
 }
 
 export async function borrarDeuda(usuarioId: number, id: number): Promise<void> {
-  const eliminada = await eliminarDeudaCompleta(usuarioId, id);
-  if (!eliminada) throw new HttpError(404, 'Deuda no encontrada');
+  const resultado = await eliminarDeudaCompleta(usuarioId, id);
+  if (resultado === 'no_existe') throw new HttpError(404, 'Deuda no encontrada');
+  if (resultado === 'con_pagos') {
+    throw new HttpError(409, 'No se puede eliminar: la deuda tiene pagos registrados');
+  }
 }
