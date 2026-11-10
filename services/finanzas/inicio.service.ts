@@ -6,6 +6,7 @@
 import { RowDataPacket } from 'mysql2';
 import pool from '../../database/pool';
 import { listarIngresosPorUsuario } from '../../models/finanzas/ingreso.model';
+import { obtenerPreferencias } from '../../models/finanzas/perfil.model';
 import { COLOR_GRUPO, Nivel, resumenGlobal, soloMinimo } from './analisis.service';
 import { cargarCartera, cargarNombres, deudaRef, obligacionApi } from './cartera.service';
 import { ingresoBase } from './ingresos.service';
@@ -24,11 +25,12 @@ async function nombreUsuario(usuarioId: number): Promise<string | null> {
 
 export async function resumenInicio(usuarioId: number) {
   const hoy = hoyISO();
-  const [deudas, n, ingresos, nombre] = await Promise.all([
+  const [deudas, n, ingresos, nombre, prefs] = await Promise.all([
     cargarCartera(usuarioId),
     cargarNombres(usuarioId),
     listarIngresosPorUsuario(usuarioId),
     nombreUsuario(usuarioId),
+    obtenerPreferencias(usuarioId),
   ]);
   const ing = await ingresoBase(usuarioId, ingresos, hoy);
   const G = resumenGlobal(deudas, ing, n, hoy);
@@ -113,5 +115,6 @@ export async function resumenInicio(usuarioId: number) {
         ? { deuda: deudaRef(dn, n), saldo: dn.res!.valor, minimo: dn.res!.minimo!, meses: sm.meses, interes: sm.interes }
         : null,
     reto: { meta: 200, avance: abonosMes },
+    logosAutomaticos: prefs.logosAutomaticos,
   };
 }

@@ -46,8 +46,6 @@ router.use('/consumos', consumosRoutes);
 router.use('/pagos', pagosRoutes);
 router.use('/ingresos', ingresosRoutes);
 router.use('/calendario', calendarioRoutes);
-
-// Placeholders: sin pantalla de Flutter conectada todavía.
 router.use('/reporteria', reporteriaRoutes);
 router.use('/asesor', asesorRoutes);
 router.use('/perfil', perfilRoutes);

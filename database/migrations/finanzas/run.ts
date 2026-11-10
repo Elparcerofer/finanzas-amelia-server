@@ -22,8 +22,9 @@ import * as m020 from './020_pagos_motor_obligaciones';
 import * as m021 from './021_ingresos_fuentes';
 import * as m022 from './022_categorias_sistema';
 import * as m023 from './023_conciliaciones_tarjeta';
+import * as m024 from './024_perfil_preferencias';
 
-const migraciones = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019, m020, m021, m022, m023];
+const migraciones = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019, m020, m021, m022, m023, m024];
 
 async function ejecutar(): Promise<void> {
   for (const migracion of migraciones) {

@@ -1,16 +1,23 @@
 import Joi from 'joi';
 
-export const crearPerfilSchema = Joi.object({
-  nombres: Joi.string().min(2).max(256).required(),
-  apellidos: Joi.string().min(2).max(256).required(),
-  cedula: Joi.string().length(10).pattern(/^\d+$/).required(),
-  telefono: Joi.string().max(15).optional(),
-  ingreso_mensual_estimado: Joi.number().min(0).optional(),
+export const perfilSchema = Joi.object({
+  nombreCompleto: Joi.string().trim().min(2).max(256).required(),
+  cedula: Joi.string().pattern(/^\d{10}$/).allow(null, '').messages({ 'string.pattern.base': 'La cédula debe tener 10 dígitos' }),
+  correo: Joi.string().email({ tlds: { allow: false } }).max(256).allow(null, ''),
+  telefono: Joi.string().max(20).allow(null, ''),
+  ingresoMensual: Joi.number().min(0).allow(null),
 });
 
-export const actualizarPerfilSchema = Joi.object({
-  nombres: Joi.string().min(2).max(256).optional(),
-  apellidos: Joi.string().min(2).max(256).optional(),
-  telefono: Joi.string().max(15).optional(),
-  ingreso_mensual_estimado: Joi.number().min(0).optional(),
-});
+const bool = Joi.boolean();
+
+export const preferenciasSchema = Joi.object({
+  canalCorreo: bool,
+  canalPush: bool,
+  canalWhatsapp: bool,
+  canalSms: bool,
+  alertaVencimiento: bool,
+  avisoCupoAlto: bool,
+  tipsSemanales: bool,
+  resumenSemanal: bool,
+  logosAutomaticos: bool,
+}).min(1);

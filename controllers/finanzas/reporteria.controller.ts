@@ -1,20 +1,11 @@
 import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../../middlewares/auth.middleware';
-import { generarHistorialIngresos, generarResumenFinanciero } from '../../services/finanzas/reporteria.service';
+import { reporteCompleto } from '../../services/finanzas/reporteria.service';
 
-export async function resumen(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+/** GET /api/finanzas/reporteria — indicadores, lecciones y datos de los gráficos. */
+export async function reporte(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = await generarResumenFinanciero(req.usuario!.id);
-    res.json(data);
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function historialIngresos(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const data = await generarHistorialIngresos(req.usuario!.id);
-    res.json(data);
+    res.json(await reporteCompleto(req.usuario!.id));
   } catch (error) {
     next(error);
   }
