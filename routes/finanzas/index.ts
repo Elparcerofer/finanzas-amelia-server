@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware';
+import * as sesionController from '../../controllers/finanzas/sesion.controller';
 import categoriasRoutes from './categorias.routes';
 import entidadesRoutes from './entidades.routes';
 import empresasRoutes from './empresas.routes';
@@ -17,9 +18,13 @@ import { categoriasTarjetaRoutes, marcasTarjetaRoutes } from './tarjeta_catalogo
 
 const router = Router();
 
-// Todo Finanzas exige la sesión de Amelia (x-token), incluidos los
-// catálogos globales: nadie sin sesión puede leer ni crear entidades,
-// empresas o categorías.
+// Canje del token de Amelia por el de Finanzas: va antes del
+// authMiddleware porque todavía no hay token de Finanzas.
+router.post('/sesion', sesionController.crear);
+
+// Todo lo demás exige el token de Finanzas (Authorization: Bearer),
+// incluidos los catálogos globales: nadie sin sesión puede leer ni crear
+// entidades, empresas o categorías.
 router.use(authMiddleware);
 
 // Rutas con endpoints reales, consumidas hoy por las pantallas de Flutter

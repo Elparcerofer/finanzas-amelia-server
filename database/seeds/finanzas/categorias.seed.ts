@@ -15,10 +15,10 @@ export const categoriasBase: { nombre: string; grupo: string; subtipo: string; e
 
 export async function seedCategorias(pool: Pool): Promise<void> {
   for (const c of categoriasBase) {
-    const [existe] = await pool.query("SELECT id FROM catalogos WHERE nombre = ? AND tipo = 'categoria'", [c.nombre]);
+    const [existe] = await pool.query('SELECT id FROM categorias WHERE nombre = ?', [c.nombre]);
     if ((existe as unknown[]).length > 0) continue;
     await pool.query(
-      "INSERT INTO catalogos (tipo, nombre, grupo, subtipo, emoji, activo) VALUES ('categoria', ?, ?, ?, ?, 1)",
+      'INSERT INTO categorias (nombre, grupo, subtipo, emoji, activo) VALUES (?, ?, ?, ?, 1)',
       [c.nombre, c.grupo, c.subtipo, c.emoji],
     );
   }

@@ -3,7 +3,7 @@ import pool from '../../database/pool';
 
 export interface TarjetaCreditoFila extends RowDataPacket {
   id: number;
-  catalogo_id: number;
+  entidad_id: number;
   nombre: string;
   marca: string;
   marca_id: number | null;
@@ -61,7 +61,7 @@ export interface TarjetaCreditoInput {
   notas?: string | null;
 }
 
-const SELECT_COLUMNAS = `t.id, t.catalogo_id, t.nombre, t.marca, t.marca_id, m.nombre AS marca_nombre,
+const SELECT_COLUMNAS = `t.id, t.entidad_id, t.nombre, t.marca, t.marca_id, m.nombre AS marca_nombre,
   t.categoria_tarjeta_id, c.nombre AS categoria_tarjeta_nombre,
   t.ultimos4, t.cupo, t.dia_corte, t.dia_pago, t.tasa_anual_pct,
   t.titular, t.tipo_titular, t.vencimiento, t.uso, t.propiedad, t.prestada_por,
@@ -124,7 +124,7 @@ export async function crearTarjeta(usuarioId: number, datos: TarjetaCreditoInput
        (marca, marca_id, categoria_tarjeta_id, ultimos4, dia_corte, dia_pago, tasa_anual_pct,
         titular, vencimiento, prestada_por, costo_anual, callcenter, asesor, asesor_celular,
         cuenta_debito_id, notas,
-        usuario_id, catalogo_id, nombre, cupo, tipo_titular, uso, propiedad, color, activa)
+        usuario_id, entidad_id, nombre, cupo, tipo_titular, uso, propiedad, color, activa)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       ...valores(datos),
@@ -147,7 +147,7 @@ export async function actualizarTarjeta(usuarioId: number, id: number, datos: Ta
        marca = ?, marca_id = ?, categoria_tarjeta_id = ?, ultimos4 = ?, dia_corte = ?, dia_pago = ?,
        tasa_anual_pct = ?, titular = ?, vencimiento = ?, prestada_por = ?, costo_anual = ?,
        callcenter = ?, asesor = ?, asesor_celular = ?, cuenta_debito_id = ?, notas = ?,
-       catalogo_id = COALESCE(?, catalogo_id),
+       entidad_id = COALESCE(?, entidad_id),
        nombre = COALESCE(?, nombre),
        cupo = COALESCE(?, cupo),
        tipo_titular = COALESCE(?, tipo_titular),

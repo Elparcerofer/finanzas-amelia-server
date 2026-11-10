@@ -17,8 +17,9 @@ import * as m015 from './015_entidades_ruc_unicos';
 import * as m016 from './016_marcas_categorias_tarjeta';
 import * as m017 from './017_logos_web_origen_tabla';
 import * as m018 from './018_paga_con_color_categoria';
+import * as m019 from './019_revision_diseno_bd';
 
-const migraciones = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018];
+const migraciones = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019];
 
 async function ejecutar(): Promise<void> {
   for (const migracion of migraciones) {

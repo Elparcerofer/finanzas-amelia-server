@@ -31,12 +31,15 @@ const consumoTarjetaSchema = Joi.object({
   fecha: Joi.date().iso().required(),
   comercio: Joi.string().trim().min(1).max(150).required()
     .messages({ 'string.empty': 'Cada consumo necesita el comercio o detalle' }),
-  categoriaId: Joi.alternatives(Joi.string(), Joi.number()).allow(null, '').optional(),
+  // Obligatoria: consumos_tarjeta.categoria_id es NOT NULL.
+  categoriaId: Joi.alternatives(Joi.string().pattern(/^\d+$/), Joi.number().integer().positive()).required()
+    .messages({ 'any.required': 'Cada consumo necesita una categoría' }),
   categoriaNombre: Joi.string().allow(null, '').optional(),
   monto: Joi.number().positive().required()
     .messages({ 'number.positive': 'El monto de cada consumo debe ser mayor a 0' }),
   modalidad: Joi.string().valid('corriente', 'dif_con', 'dif_sin').required(),
   plazo: Joi.number().integer().min(1).max(48).optional(),
+  mesesGracia: Joi.number().integer().min(0).max(12).optional(),
 });
 
 const cuotaAmortizacionSchema = Joi.object({

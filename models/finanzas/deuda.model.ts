@@ -3,7 +3,7 @@ import pool from '../../database/pool';
 
 export interface DeudaFila extends RowDataPacket {
   id: number;
-  catalogo_id: number | null;
+  acreedor_id: number | null;
   tarjeta_credito_id: number | null;
   descripcion: string | null;
   monto_total: string;
@@ -41,11 +41,13 @@ export interface ConsumoTarjetaFila extends RowDataPacket {
   id: number;
   fecha_consumo: string;
   comercio: string;
-  categoria_id: number | null;
+  categoria_id: number;
   categoria_nombre: string | null;
   monto: string;
-  modalidad: string;
+  tipo_consumo: 'corriente' | 'diferido';
+  con_intereses: number;
   plazo_meses: number;
+  meses_gracia: number;
 }
 
 export interface CuotaAmortizacionFila extends RowDataPacket {
@@ -59,7 +61,7 @@ export interface CuotaAmortizacionFila extends RowDataPacket {
   saldo_despues: string;
 }
 
-const SELECT_DEUDA = `id, catalogo_id, tarjeta_credito_id, descripcion, monto_total, saldo_pendiente, tasa_interes,
+const SELECT_DEUDA = `id, acreedor_id, tarjeta_credito_id, descripcion, monto_total, saldo_pendiente, tasa_interes,
   fecha_inicio, fecha_vencimiento, estado, tipo_deuda, alias, aviso_dias, categoria_id,
   resumen_minimo, resumen_corte, resumen_restantes_cuotas, paga_con`;
 
@@ -101,9 +103,9 @@ export async function obtenerCuotas(tablaAmortizacionId: number): Promise<CuotaA
 export async function obtenerConsumosTarjeta(deudaId: number): Promise<ConsumoTarjetaFila[]> {
   const [rows] = await pool.query<ConsumoTarjetaFila[]>(
     `SELECT ct.id, ct.fecha_consumo, ct.comercio, ct.categoria_id, c.nombre AS categoria_nombre,
-            ct.monto, ct.modalidad, ct.plazo_meses
+            ct.monto, ct.tipo_consumo, ct.con_intereses, ct.plazo_meses, ct.meses_gracia
      FROM consumos_tarjeta ct
-     LEFT JOIN catalogos c ON c.id = ct.categoria_id
+     LEFT JOIN categorias c ON c.id = ct.categoria_id
      WHERE ct.deuda_id = ? ORDER BY ct.fecha_consumo ASC, ct.id ASC`,
     [deudaId],
   );
@@ -124,7 +126,6 @@ export async function diaPagoTarjeta(usuarioId: number, tarjetaId: number): Prom
   return rows[0].dia_pago ?? null;
 }
 
-/** De los ids recibidos, los que son categorías existentes del catálogo. */
 /**
  * "¿Con qué se paga?": c:<cuenta del usuario> · t:<tarjeta del usuario> ·
  * e:<entidad activa>. true si la referencia existe y es del usuario.
@@ -142,17 +143,18 @@ export async function pagaConValido(usuarioId: number, ref: string): Promise<boo
   return rows.length > 0;
 }
 
+/** De los ids recibidos, los que son categorías existentes. */
 export async function categoriasExistentes(ids: number[]): Promise<Set<number>> {
   if (!ids.length) return new Set();
   const [rows] = await pool.query<RowDataPacket[]>(
-    "SELECT id FROM catalogos WHERE tipo = 'categoria' AND id IN (?)",
+    'SELECT id FROM categorias WHERE id IN (?)',
     [ids],
   );
   return new Set(rows.map((r) => Number(r.id)));
 }
 
 export interface DatosDeudaDb {
-  catalogoId: number | null;
+  acreedorId: number | null;
   tarjetaCreditoId: number | null;
   descripcion: string | null;
   tipoDeuda: string;
@@ -185,11 +187,12 @@ export interface DatosTablaAmortizacionDb {
 export interface DatosConsumoDb {
   fecha: string;
   comercio: string;
-  categoriaId: number | null;
+  categoriaId: number;
   monto: number;
-  /** Valor de la BD: corriente / diferido_con_intereses / diferido_sin_intereses. */
-  modalidad: string;
+  tipoConsumo: 'corriente' | 'diferido';
+  conIntereses: boolean;
   plazo: number;
+  mesesGracia: number;
 }
 
 export interface DatosCuotaDb {
@@ -215,13 +218,13 @@ export async function insertarDeudaCompleta(
 
     const [resultDeuda] = await conexion.query<ResultSetHeader>(
       `INSERT INTO deudas
-         (usuario_id, catalogo_id, tarjeta_credito_id, descripcion, monto_total, saldo_pendiente, tasa_interes,
+         (usuario_id, acreedor_id, tarjeta_credito_id, descripcion, monto_total, saldo_pendiente, tasa_interes,
           fecha_inicio, fecha_vencimiento, estado, tipo_deuda, alias, aviso_dias, categoria_id,
           resumen_minimo, resumen_corte, resumen_restantes_cuotas, paga_con)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         usuarioId,
-        deuda.catalogoId,
+        deuda.acreedorId,
         deuda.tarjetaCreditoId,
         deuda.descripcion,
         deuda.montoTotal,
@@ -270,12 +273,12 @@ export async function actualizarDeudaCompleta(
 
     await conexion.query(
       `UPDATE deudas SET
-         catalogo_id = ?, tarjeta_credito_id = ?, descripcion = ?, monto_total = ?, saldo_pendiente = ?,
+         acreedor_id = ?, tarjeta_credito_id = ?, descripcion = ?, monto_total = ?, saldo_pendiente = ?,
          tasa_interes = ?, fecha_inicio = ?, fecha_vencimiento = ?, tipo_deuda = ?, alias = ?, aviso_dias = ?,
          categoria_id = ?, resumen_minimo = ?, resumen_corte = ?, resumen_restantes_cuotas = ?, paga_con = ?
        WHERE id = ? AND usuario_id = ?`,
       [
-        deuda.catalogoId,
+        deuda.acreedorId,
         deuda.tarjetaCreditoId,
         deuda.descripcion,
         deuda.montoTotal,
@@ -297,9 +300,9 @@ export async function actualizarDeudaCompleta(
     );
 
     // Reemplaza por completo la tabla de amortización vigente (el PUT de
-    // Flutter manda el objeto Deuda entero cada vez, no un parche).
-    await conexion.query('DELETE FROM tablas_amortizacion WHERE deuda_id = ?', [id]);
-    await conexion.query('DELETE FROM consumos_tarjeta WHERE deuda_id = ?', [id]);
+    // Flutter manda el objeto Deuda entero cada vez, no un parche). Sin
+    // ON DELETE CASCADE, las cuotas se borran antes que su tabla.
+    await borrarDetalle(conexion, id);
 
     if (tabla) {
       await insertarTablaYCuotas(conexion, id, tabla, cuotas);
@@ -358,16 +361,66 @@ async function insertarConsumos(
 ): Promise<void> {
   if (!consumos.length) return;
   await conexion.query(
-    `INSERT INTO consumos_tarjeta (deuda_id, fecha_consumo, comercio, categoria_id, monto, modalidad, plazo_meses)
+    `INSERT INTO consumos_tarjeta
+       (deuda_id, fecha_consumo, comercio, categoria_id, monto, tipo_consumo, con_intereses, plazo_meses, meses_gracia)
      VALUES ?`,
-    [consumos.map((c) => [deudaId, c.fecha, c.comercio, c.categoriaId, c.monto, c.modalidad, c.plazo])],
+    [consumos.map((c) => [
+      deudaId, c.fecha, c.comercio, c.categoriaId, c.monto, c.tipoConsumo, c.conIntereses ? 1 : 0, c.plazo, c.mesesGracia,
+    ])],
   );
 }
 
-export async function eliminarDeudaCompleta(usuarioId: number, id: number): Promise<boolean> {
-  const [result] = await pool.query<ResultSetHeader>(
-    'DELETE FROM deudas WHERE id = ? AND usuario_id = ?',
-    [id, usuarioId],
+type Conexion = Awaited<ReturnType<typeof pool.getConnection>>;
+
+/** Tabla de amortización (con sus cuotas) y consumos de la deuda. */
+async function borrarDetalle(conexion: Conexion, deudaId: number): Promise<void> {
+  await conexion.query(
+    `DELETE c FROM cuotas_amortizacion c
+     JOIN tablas_amortizacion t ON t.id = c.tabla_amortizacion_id
+     WHERE t.deuda_id = ?`,
+    [deudaId],
   );
-  return result.affectedRows > 0;
+  await conexion.query('DELETE FROM tablas_amortizacion WHERE deuda_id = ?', [deudaId]);
+  await conexion.query('DELETE FROM consumos_tarjeta WHERE deuda_id = ?', [deudaId]);
+}
+
+/**
+ * Ya no hay ON DELETE CASCADE: el detalle propio de la deuda (tabla de
+ * amortización, cuotas, consumos) se borra aquí explícitamente. Los pagos
+ * no se borran nunca en silencio: si la deuda tiene pagos, no se elimina.
+ */
+export async function eliminarDeudaCompleta(
+  usuarioId: number,
+  id: number,
+): Promise<'eliminada' | 'no_existe' | 'con_pagos'> {
+  const conexion = await pool.getConnection();
+  try {
+    await conexion.beginTransaction();
+
+    const [deuda] = await conexion.query<RowDataPacket[]>(
+      'SELECT id FROM deudas WHERE id = ? AND usuario_id = ? FOR UPDATE',
+      [id, usuarioId],
+    );
+    if (!deuda.length) {
+      await conexion.rollback();
+      return 'no_existe';
+    }
+
+    const [pagos] = await conexion.query<RowDataPacket[]>('SELECT id FROM pagos WHERE deuda_id = ? LIMIT 1', [id]);
+    if (pagos.length) {
+      await conexion.rollback();
+      return 'con_pagos';
+    }
+
+    await borrarDetalle(conexion, id);
+    await conexion.query('DELETE FROM deudas WHERE id = ? AND usuario_id = ?', [id, usuarioId]);
+
+    await conexion.commit();
+    return 'eliminada';
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
 }
