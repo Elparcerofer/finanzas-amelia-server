@@ -1,39 +1,45 @@
 import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../../middlewares/auth.middleware';
-import { obtenerPago, obtenerPagosDeDeuda, registrarPago, removerPago } from '../../services/finanzas/pagos.service';
+import {
+  anularPago,
+  listarHistorial,
+  listarPendientes,
+  obtenerDetalle,
+  opcionesPago,
+  registrarPago,
+  simularAbonoCapital,
+} from '../../services/finanzas/pagos.service';
 
-export async function listarPorDeuda(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const pagos = await obtenerPagosDeDeuda(req.usuario!.id, Number(req.params.deudaId));
-    res.json(pagos);
-  } catch (error) {
-    next(error);
-  }
-}
+type Handler = (req: AuthRequest, res: Response) => Promise<void>;
 
-export async function obtener(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const pago = await obtenerPago(req.usuario!.id, Number(req.params.id));
-    res.json(pago);
-  } catch (error) {
-    next(error);
-  }
-}
+/** Envuelve el handler para mandar los errores al errorMiddleware. */
+const manejar = (h: Handler) => (req: AuthRequest, res: Response, next: NextFunction) => h(req, res).catch(next);
 
-export async function crear(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const pago = await registrarPago(req.usuario!.id, req.body);
-    res.status(201).json(pago);
-  } catch (error) {
-    next(error);
-  }
-}
+export const pendientes = manejar(async (req, res) => {
+  res.json(await listarPendientes(req.usuario!.id));
+});
 
-export async function eliminar(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    await removerPago(req.usuario!.id, Number(req.params.id));
-    res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
-}
+export const historial = manejar(async (req, res) => {
+  res.json(await listarHistorial(req.usuario!.id));
+});
+
+export const opciones = manejar(async (req, res) => {
+  res.json(await opcionesPago(req.usuario!.id));
+});
+
+export const detalleDeuda = manejar(async (req, res) => {
+  res.json(await obtenerDetalle(req.usuario!.id, Number(req.params.deudaId)));
+});
+
+export const simularAbono = manejar(async (req, res) => {
+  const { monto, modo } = req.query as unknown as { monto: number; modo: 'plazo' | 'cuota' };
+  res.json(await simularAbonoCapital(req.usuario!.id, Number(req.params.deudaId), Number(monto), modo));
+});
+
+export const registrar = manejar(async (req, res) => {
+  res.status(201).json(await registrarPago(req.usuario!.id, req.body));
+});
+
+export const anular = manejar(async (req, res) => {
+  res.json(await anularPago(req.usuario!.id, Number(req.params.id), req.body?.motivo || null));
+});

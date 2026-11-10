@@ -18,6 +18,7 @@ export interface DeudaFila extends RowDataPacket {
   categoria_id: number | null;
   resumen_minimo: string | null;
   resumen_corte: string | null;
+  resumen_saldo: string | null;
   resumen_restantes_cuotas: number | null;
   paga_con: string | null;
 }
@@ -63,7 +64,7 @@ export interface CuotaAmortizacionFila extends RowDataPacket {
 
 const SELECT_DEUDA = `id, acreedor_id, tarjeta_credito_id, descripcion, monto_total, saldo_pendiente, tasa_interes,
   fecha_inicio, fecha_vencimiento, estado, tipo_deuda, alias, aviso_dias, categoria_id,
-  resumen_minimo, resumen_corte, resumen_restantes_cuotas, paga_con`;
+  resumen_minimo, resumen_corte, resumen_saldo, resumen_restantes_cuotas, paga_con`;
 
 export async function listarDeudasFilas(usuarioId: number): Promise<DeudaFila[]> {
   const [rows] = await pool.query<DeudaFila[]>(
@@ -168,6 +169,8 @@ export interface DatosDeudaDb {
   fechaVencimiento: string;
   resumenMinimo: number | null;
   resumenCorte: string | null;
+  /** Saldo que informó el usuario (solo resumidas); null si no lo informó. */
+  resumenSaldo: number | null;
   resumenRestantesCuotas: number | null;
   pagaCon: string | null;
 }
@@ -220,8 +223,8 @@ export async function insertarDeudaCompleta(
       `INSERT INTO deudas
          (usuario_id, acreedor_id, tarjeta_credito_id, descripcion, monto_total, saldo_pendiente, tasa_interes,
           fecha_inicio, fecha_vencimiento, estado, tipo_deuda, alias, aviso_dias, categoria_id,
-          resumen_minimo, resumen_corte, resumen_restantes_cuotas, paga_con)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          resumen_minimo, resumen_corte, resumen_saldo, resumen_restantes_cuotas, paga_con)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         usuarioId,
         deuda.acreedorId,
@@ -238,6 +241,7 @@ export async function insertarDeudaCompleta(
         deuda.categoriaId,
         deuda.resumenMinimo,
         deuda.resumenCorte,
+        deuda.resumenSaldo,
         deuda.resumenRestantesCuotas,
         deuda.pagaCon,
       ],
@@ -275,7 +279,7 @@ export async function actualizarDeudaCompleta(
       `UPDATE deudas SET
          acreedor_id = ?, tarjeta_credito_id = ?, descripcion = ?, monto_total = ?, saldo_pendiente = ?,
          tasa_interes = ?, fecha_inicio = ?, fecha_vencimiento = ?, tipo_deuda = ?, alias = ?, aviso_dias = ?,
-         categoria_id = ?, resumen_minimo = ?, resumen_corte = ?, resumen_restantes_cuotas = ?, paga_con = ?
+         categoria_id = ?, resumen_minimo = ?, resumen_corte = ?, resumen_saldo = ?, resumen_restantes_cuotas = ?, paga_con = ?
        WHERE id = ? AND usuario_id = ?`,
       [
         deuda.acreedorId,
@@ -292,6 +296,7 @@ export async function actualizarDeudaCompleta(
         deuda.categoriaId,
         deuda.resumenMinimo,
         deuda.resumenCorte,
+        deuda.resumenSaldo,
         deuda.resumenRestantesCuotas,
         deuda.pagaCon,
         id,

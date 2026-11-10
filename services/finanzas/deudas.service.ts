@@ -20,6 +20,7 @@ import {
   TablaAmortizacionFila,
 } from '../../models/finanzas/deuda.model';
 import { HttpError } from '../../middlewares/error.middleware';
+import { sincronizarResumenDeuda } from './cartera.service';
 
 /**
  * Joi convierte los campos `Joi.date()` del body a objetos Date de JS.
@@ -222,6 +223,7 @@ async function datosTarjetaDetallada(
       fechaVencimiento: vencimiento,
       resumenMinimo: null,
       resumenCorte: null,
+      resumenSaldo: null,
       resumenRestantesCuotas: null,
       pagaCon: null,
     },
@@ -276,6 +278,7 @@ async function datosParaDb(usuarioId: number, input: DeudaInputApi): Promise<Dat
       fechaVencimiento: aFechaSql(ultimaCuota.fecha),
       resumenMinimo: null,
       resumenCorte: null,
+      resumenSaldo: null,
       resumenRestantesCuotas: null,
       pagaCon: null,
     };
@@ -327,6 +330,7 @@ async function datosParaDb(usuarioId: number, input: DeudaInputApi): Promise<Dat
     fechaVencimiento: aFechaSql(resumen.fecha),
     resumenMinimo: resumen.minimo ?? null,
     resumenCorte: resumen.corte ? aFechaSql(resumen.corte) : null,
+    resumenSaldo: resumen.saldo ?? null,
     resumenRestantesCuotas: resumen.restantesCuotas ?? null,
     pagaCon: null,
   };
@@ -362,7 +366,7 @@ async function ensamblarApi(fila: DeudaFila): Promise<DeudaApi> {
       fecha: fila.fecha_vencimiento,
       minimo: fila.resumen_minimo !== null ? Number(fila.resumen_minimo) : null,
       corte: fila.resumen_corte,
-      saldo: Number(fila.saldo_pendiente),
+      saldo: fila.resumen_saldo !== null ? Number(fila.resumen_saldo) : null,
       restantesCuotas: fila.resumen_restantes_cuotas,
       tasaAnual: fila.tasa_interes !== null ? Number(fila.tasa_interes) * 100 : null,
       nota: fila.descripcion,
@@ -437,6 +441,7 @@ async function conPagaCon(usuarioId: number, input: DeudaInputApi, datos: DatosP
 export async function registrarDeuda(usuarioId: number, input: DeudaInputApi): Promise<DeudaApi> {
   const { deuda, tabla, cuotas, consumos } = await conPagaCon(usuarioId, input, await datosParaDb(usuarioId, input));
   const id = await insertarDeudaCompleta(usuarioId, deuda, tabla, cuotas, consumos);
+  await sincronizarResumenDeuda(usuarioId, id);
   return obtenerDeuda(usuarioId, id);
 }
 
@@ -445,6 +450,8 @@ export async function editarDeuda(usuarioId: number, id: number, input: DeudaInp
   if (!existente) throw new HttpError(404, 'Deuda no encontrada');
   const { deuda, tabla, cuotas, consumos } = await conPagaCon(usuarioId, input, await datosParaDb(usuarioId, input));
   await actualizarDeudaCompleta(usuarioId, id, deuda, tabla, cuotas, consumos);
+  // Si ya tenía pagos, el saldo y el estado se recalculan con la deuda editada.
+  await sincronizarResumenDeuda(usuarioId, id);
   return obtenerDeuda(usuarioId, id);
 }
 
