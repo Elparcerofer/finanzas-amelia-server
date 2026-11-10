@@ -1,5 +1,6 @@
 import { listarDeudasFilas } from '../../models/finanzas/deuda.model';
-import { listarIngresosPorUsuario, sumaIngresosMensualesPorUsuario } from '../../models/finanzas/ingreso.model';
+import { listarIngresosPorUsuario } from '../../models/finanzas/ingreso.model';
+import { ingresoBase } from './ingresos.service';
 import { resumenConsumosPorCategoria } from '../../models/finanzas/consumo.model';
 import { redondearDosDecimales } from '../../utils/finanzas/formatters_finanzas';
 
@@ -12,7 +13,7 @@ export interface ResumenFinanciero {
 
 export async function generarResumenFinanciero(usuarioId: number): Promise<ResumenFinanciero> {
   const [ingresoMensual, deudas, consumosPorCategoria] = await Promise.all([
-    sumaIngresosMensualesPorUsuario(usuarioId),
+    listarIngresosPorUsuario(usuarioId).then((i) => ingresoBase(usuarioId, i)),
     listarDeudasFilas(usuarioId),
     resumenConsumosPorCategoria(usuarioId),
   ]);

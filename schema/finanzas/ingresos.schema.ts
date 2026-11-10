@@ -1,17 +1,13 @@
 import Joi from 'joi';
 
-export const crearIngresoSchema = Joi.object({
-  monto: Joi.number().positive().required(),
-  fuente: Joi.string().min(2).max(120).required(),
-  fecha: Joi.date().required(),
-  periodicidad: Joi.string().valid('mensual', 'quincenal', 'semanal', 'unico').required(),
-});
-
-export const actualizarIngresoSchema = Joi.object({
-  monto: Joi.number().positive().optional(),
-  fuente: Joi.string().min(2).max(120).optional(),
-  fecha: Joi.date().optional(),
-  periodicidad: Joi.string().valid('mensual', 'quincenal', 'semanal', 'unico').optional(),
+export const guardarIngresoSchema = Joi.object({
+  fuente: Joi.string().max(20).required(),
+  monto: Joi.number().positive().precision(2).required(),
+  fecha: Joi.date().iso().required(),
+  periodicidad: Joi.string().valid('mensual', 'unico').required(),
+  hasta: Joi.string().pattern(/^\d{4}-(0[1-9]|1[0-2])$/).allow(null, ''),
+  cuentaId: Joi.number().integer().positive().allow(null),
+  descripcion: Joi.string().max(255).allow(null, ''),
 });
 
 export const idParamsSchema = Joi.object({

@@ -2,53 +2,32 @@ import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../../middlewares/auth.middleware';
 import {
   editarIngreso,
-  obtenerIngreso,
-  obtenerIngresosDeUsuario,
+  fuentesIngreso,
   registrarIngreso,
   removerIngreso,
+  resumenIngresos,
 } from '../../services/finanzas/ingresos.service';
 
-export async function listar(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const ingresos = await obtenerIngresosDeUsuario(req.usuario!.id);
-    res.json(ingresos);
-  } catch (error) {
-    next(error);
-  }
-}
+type Handler = (req: AuthRequest, res: Response) => Promise<void>;
+const manejar = (h: Handler) => (req: AuthRequest, res: Response, next: NextFunction) => h(req, res).catch(next);
 
-export async function obtener(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const ingreso = await obtenerIngreso(Number(req.params.id));
-    res.json(ingreso);
-  } catch (error) {
-    next(error);
-  }
-}
+export const resumen = manejar(async (req, res) => {
+  res.json(await resumenIngresos(req.usuario!.id));
+});
 
-export async function crear(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const ingreso = await registrarIngreso(req.usuario!.id, req.body);
-    res.status(201).json(ingreso);
-  } catch (error) {
-    next(error);
-  }
-}
+export const fuentes = manejar(async (_req, res) => {
+  res.json(await fuentesIngreso());
+});
 
-export async function actualizar(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const ingreso = await editarIngreso(Number(req.params.id), req.body);
-    res.json(ingreso);
-  } catch (error) {
-    next(error);
-  }
-}
+export const crear = manejar(async (req, res) => {
+  res.status(201).json(await registrarIngreso(req.usuario!.id, req.body));
+});
 
-export async function eliminar(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    await removerIngreso(Number(req.params.id));
-    res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
-}
+export const actualizar = manejar(async (req, res) => {
+  res.json(await editarIngreso(req.usuario!.id, Number(req.params.id), req.body));
+});
+
+export const eliminar = manejar(async (req, res) => {
+  await removerIngreso(req.usuario!.id, Number(req.params.id));
+  res.status(204).send();
+});
