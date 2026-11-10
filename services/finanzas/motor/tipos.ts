@@ -67,6 +67,8 @@ export interface ParamsAmort {
   desgTipo: string;
   desgVal: number;
   otrosSeg: number;
+  /** generada (con los datos del usuario) o subida (archivo del banco). */
+  origen: string;
 }
 
 export type Modalidad = 'corriente' | 'dif_con' | 'dif_sin';
@@ -103,6 +105,9 @@ export interface TarjetaMotor {
 
 export interface ResumenMotor {
   valor: number;
+  /** Fecha de corte del estado de cuenta (tarjeta resumida). */
+  corte: string | null;
+  nota: string | null;
   fecha: string;
   minimo: number | null;
   saldo: number | null;

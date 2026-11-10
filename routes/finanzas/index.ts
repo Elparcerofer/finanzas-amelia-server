@@ -12,6 +12,7 @@ import ingresosRoutes from './ingresos.routes';
 import reporteriaRoutes from './reporteria.routes';
 import calendarioRoutes from './calendario.routes';
 import inicioRoutes from './inicio.routes';
+import consumosRoutes from './consumos.routes';
 import asesorRoutes from './asesor.routes';
 import perfilRoutes from './perfil.routes';
 import usosRoutes from './usos.routes';
@@ -40,6 +41,7 @@ router.use('/categorias-tarjeta', categoriasTarjetaRoutes);
 router.use('/deudas', deudasRoutes);
 router.use('/usos', usosRoutes);
 router.use('/inicio', inicioRoutes);
+router.use('/consumos', consumosRoutes);
 
 router.use('/pagos', pagosRoutes);
 router.use('/ingresos', ingresosRoutes);

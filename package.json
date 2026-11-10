@@ -21,7 +21,8 @@
     "joi": "^17.13.1",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "mysql2": "^3.24.6"
+    "mysql2": "^3.24.6",
+    "pdfjs-dist": "3.11.174"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

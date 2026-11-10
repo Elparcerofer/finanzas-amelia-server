@@ -26,6 +26,8 @@ export interface DeudaCarteraFila extends RowDataPacket {
   fecha_vencimiento: string;
   resumen_minimo: string | null;
   resumen_saldo: string | null;
+  resumen_corte: string | null;
+  descripcion: string | null;
   resumen_restantes_cuotas: number | null;
   creado_en: string;
 }
@@ -55,6 +57,7 @@ export interface TablaCarteraFila extends RowDataPacket {
   seg_desgravamen_tipo: string;
   seg_desgravamen_valor: string;
   otros_seguros: string;
+  origen: string;
 }
 
 export interface CuotaCarteraFila extends RowDataPacket {
@@ -130,7 +133,7 @@ export async function leerCartera(usuarioId: number, soloDeudaId?: number): Prom
     `SELECT d.id, d.tipo_deuda, d.alias, d.acreedor_id, a.nombre AS acreedor_nombre, a.subtipo AS acreedor_subtipo,
             a.web AS acreedor_web, a.logo AS acreedor_logo,
             d.tarjeta_credito_id, d.categoria_id, d.paga_con, d.aviso_dias, d.monto_total, d.saldo_pendiente,
-            d.tasa_interes, d.fecha_vencimiento, d.resumen_minimo, d.resumen_saldo, d.resumen_restantes_cuotas,
+            d.tasa_interes, d.fecha_vencimiento, d.resumen_minimo, d.resumen_saldo, d.resumen_corte, d.descripcion, d.resumen_restantes_cuotas,
             DATE_FORMAT(d.creado_en, '%Y-%m-%d') AS creado_en
      FROM deudas d LEFT JOIN catalogos a ON a.id = d.acreedor_id
      WHERE d.usuario_id = ? ${filtro}
@@ -156,7 +159,7 @@ export async function leerCartera(usuarioId: number, soloDeudaId?: number): Prom
     vacio(ids, async () => {
       const [r] = await pool.query<TablaCarteraFila[]>(
         `SELECT t.id, t.deuda_id, t.tasa_anual_pct, t.fecha_inicio, t.seg_desgravamen_tipo,
-                t.seg_desgravamen_valor, t.otros_seguros
+                t.seg_desgravamen_valor, t.otros_seguros, t.origen
          FROM tablas_amortizacion t
          WHERE t.deuda_id IN (?) AND t.es_vigente = 1
            AND t.version = (SELECT MAX(x.version) FROM tablas_amortizacion x WHERE x.deuda_id = t.deuda_id AND x.es_vigente = 1)`,

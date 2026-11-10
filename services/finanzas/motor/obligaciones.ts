@@ -377,6 +377,10 @@ export function esCuotaFija(rows: CuotaMotor[]): boolean {
 }
 
 export interface SimulacionAbono {
+  /** El abono cubre todo el saldo. */
+  liquida: boolean;
+  /** Cuotas que quedarían. */
+  meses: number;
   ahorro: number;
   mesesMenos: number;
   nuevaCuota: number;
@@ -394,7 +398,7 @@ export function simularAbono(rows: CuotaMotor[], tasa: number, k: number, abono:
   const base = rest[0];
   const cuotaActual = base.capital + base.interes;
   let s = saldo0 - abono;
-  if (s <= 0.005) return { ahorro: r2(intOrig), mesesMenos: nR, nuevaCuota: 0, cuotaActual: r2(cuotaActual) };
+  if (s <= 0.005) return { liquida: true, meses: 0, ahorro: r2(intOrig), mesesMenos: nR, nuevaCuota: 0, cuotaActual: r2(cuotaActual) };
   const fija = esCuotaFija(rows);
   let intNew = 0;
   let m = 0;
@@ -429,7 +433,7 @@ export function simularAbono(rows: CuotaMotor[], tasa: number, k: number, abono:
       nuevaCuota = cap + s * i;
     }
   }
-  return { ahorro: r2(intOrig - intNew), mesesMenos: nR - m, nuevaCuota: r2(nuevaCuota), cuotaActual: r2(cuotaActual) };
+  return { liquida: false, meses: m, ahorro: r2(intOrig - intNew), mesesMenos: nR - m, nuevaCuota: r2(nuevaCuota), cuotaActual: r2(cuotaActual) };
 }
 
 /** Rehace la tabla desde la cuota k con el nuevo saldo (abono a capital). */

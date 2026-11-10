@@ -76,6 +76,7 @@ function construir(c: Cartera): DeudaMotor[] {
             desgTipo: tabla.seg_desgravamen_tipo,
             desgVal: num(tabla.seg_desgravamen_valor),
             otrosSeg: num(tabla.otros_seguros),
+            origen: tabla.origen || 'generada',
           },
           rows: c.cuotas
             .filter((q) => q.tabla_amortizacion_id === tabla.id)
@@ -133,6 +134,8 @@ function construir(c: Cartera): DeudaMotor[] {
         ? null
         : {
             valor: num(f.monto_total),
+            corte: f.resumen_corte,
+            nota: f.descripcion,
             fecha: f.fecha_vencimiento,
             minimo: numN(f.resumen_minimo),
             // El saldo informado y las cuotas restantes son los del

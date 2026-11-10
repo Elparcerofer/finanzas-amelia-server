@@ -17,6 +17,9 @@ app.use(corsMiddleware);
 app.use(morgan('dev'));
 // 1 MB: el logo (data URI ~128×128) y una tabla de amortización de
 // hasta 480 cuotas no caben en los 100 KB por defecto.
+// El PDF del estado de cuenta llega en base64 (hasta ~10 MB): esa ruta
+// se parsea antes con un límite mayor; el resto sigue con 1 MB.
+app.use(/^\/api\/finanzas\/consumos\/deuda\/\d+\/conciliacion\/[\d-]+\/pdf$/, express.json({ limit: '15mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(rateLimitMiddleware);
 

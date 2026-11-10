@@ -418,6 +418,13 @@ export async function eliminarDeudaCompleta(
     }
 
     await borrarDetalle(conexion, id);
+    // Conciliaciones del estado de cuenta (solo tarjetas detalladas).
+    await conexion.query(
+      `DELETE i FROM conciliaciones_items i
+       JOIN conciliaciones_tarjeta c ON c.id = i.conciliacion_id WHERE c.deuda_id = ?`,
+      [id],
+    );
+    await conexion.query('DELETE FROM conciliaciones_tarjeta WHERE deuda_id = ?', [id]);
     await conexion.query('DELETE FROM deudas WHERE id = ? AND usuario_id = ?', [id, usuarioId]);
 
     await conexion.commit();
