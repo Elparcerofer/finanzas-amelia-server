@@ -1,13 +1,12 @@
 import { Router } from 'express';
-import * as calendarioController from '../../controllers/finanzas/calendario.controller';
+import * as calendario from '../../controllers/finanzas/calendario.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 
+/** /api/finanzas/calendario?mes=YYYY-MM — vencimientos y pagos del mes. */
 const router = Router();
 
 router.use(authMiddleware);
 
-router.get('/', calendarioController.listar);
-router.post('/', calendarioController.crear);
-router.delete('/:id', calendarioController.eliminar);
+router.get('/', calendario.mes);
 
 export default router;

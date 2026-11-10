@@ -1,30 +1,22 @@
 import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../../middlewares/auth.middleware';
-import { editarPerfil, obtenerPerfil, registrarPerfil } from '../../services/finanzas/perfil.service';
+import { actualizarPerfil, actualizarPreferencias, perfilCompleto, respaldo } from '../../services/finanzas/perfil.service';
 
-export async function obtener(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const perfil = await obtenerPerfil(req.usuario!.id);
-    res.json(perfil);
-  } catch (error) {
-    next(error);
-  }
-}
+type Handler = (req: AuthRequest, res: Response) => Promise<void>;
+const manejar = (h: Handler) => (req: AuthRequest, res: Response, next: NextFunction) => h(req, res).catch(next);
 
-export async function crear(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const perfil = await registrarPerfil(req.usuario!.id, req.body);
-    res.status(201).json(perfil);
-  } catch (error) {
-    next(error);
-  }
-}
+export const obtener = manejar(async (req, res) => {
+  res.json(await perfilCompleto(req.usuario!.id));
+});
 
-export async function actualizar(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const perfil = await editarPerfil(req.usuario!.id, req.body);
-    res.json(perfil);
-  } catch (error) {
-    next(error);
-  }
-}
+export const actualizar = manejar(async (req, res) => {
+  res.json(await actualizarPerfil(req.usuario!.id, req.body));
+});
+
+export const preferencias = manejar(async (req, res) => {
+  res.json(await actualizarPreferencias(req.usuario!.id, req.body));
+});
+
+export const exportar = manejar(async (req, res) => {
+  res.json(await respaldo(req.usuario!.id));
+});
