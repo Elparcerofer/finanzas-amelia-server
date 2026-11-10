@@ -231,7 +231,9 @@ export interface Nombres {
   cuentas: Map<number, { nombre: string; tercero: boolean; tipo: string }>;
   tarjetas: Map<number, { nombre: string; tercero: boolean }>;
   entidades: Map<number, string>;
-  categorias: Map<number, { nombre: string; emoji: string | null; color: string | null; subtipo: string | null; grupo: string | null; activo: boolean }>;
+  categorias: Map<number, { nombre: string; emoji: string | null; color: string | null; subtipo: string | null; grupo: string | null; activo: boolean; codigo: string | null; sistema: boolean }>;
+  /** id de las categorías con código (intereses, seguros, multas, sin_categoria…). */
+  porCodigo: Map<string, number>;
 }
 
 const sinBanco = (s: string): string => s.replace(/^Banco (del |de )?/, '');
@@ -247,7 +249,7 @@ export async function cargarNombres(usuarioId: number): Promise<Nombres> {
        FROM tarjetas_credito t LEFT JOIN catalogos e ON e.id = t.entidad_id WHERE t.usuario_id = ?`,
       [usuarioId],
     ),
-    pool.query<RowDataPacket[]>('SELECT id, nombre, emoji, color, subtipo, grupo, activo FROM categorias'),
+    pool.query<RowDataPacket[]>('SELECT id, codigo, nombre, emoji, color, subtipo, grupo, activo, sistema FROM categorias'),
   ]);
   const [entidades] = await pool.query<RowDataPacket[]>("SELECT id, nombre FROM catalogos WHERE tipo = 'banco'");
   const tercero = (p: string | null) => (p || '').toLowerCase().includes('tercer');
@@ -272,10 +274,11 @@ export async function cargarNombres(usuarioId: number): Promise<Nombres> {
       ]),
     ),
     entidades: new Map(entidades.map((x) => [Number(x.id), String(x.nombre)])),
+    porCodigo: new Map(categorias.filter((x) => x.codigo).map((x) => [String(x.codigo), Number(x.id)])),
     categorias: new Map(
       categorias.map((x) => [
         Number(x.id),
-        { nombre: String(x.nombre), emoji: x.emoji, color: x.color, subtipo: x.subtipo, grupo: x.grupo, activo: Number(x.activo) === 1 },
+        { nombre: String(x.nombre), emoji: x.emoji, color: x.color, subtipo: x.subtipo, grupo: x.grupo, activo: Number(x.activo) === 1, codigo: x.codigo, sistema: Number(x.sistema) === 1 },
       ]),
     ),
   };

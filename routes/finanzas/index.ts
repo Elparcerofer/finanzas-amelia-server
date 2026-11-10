@@ -11,6 +11,7 @@ import pagosRoutes from './pagos.routes';
 import ingresosRoutes from './ingresos.routes';
 import reporteriaRoutes from './reporteria.routes';
 import calendarioRoutes from './calendario.routes';
+import inicioRoutes from './inicio.routes';
 import asesorRoutes from './asesor.routes';
 import perfilRoutes from './perfil.routes';
 import usosRoutes from './usos.routes';
@@ -38,12 +39,14 @@ router.use('/marcas-tarjeta', marcasTarjetaRoutes);
 router.use('/categorias-tarjeta', categoriasTarjetaRoutes);
 router.use('/deudas', deudasRoutes);
 router.use('/usos', usosRoutes);
+router.use('/inicio', inicioRoutes);
 
-// Placeholders: sin pantalla de Flutter conectada todavía.
 router.use('/pagos', pagosRoutes);
 router.use('/ingresos', ingresosRoutes);
-router.use('/reporteria', reporteriaRoutes);
 router.use('/calendario', calendarioRoutes);
+
+// Placeholders: sin pantalla de Flutter conectada todavía.
+router.use('/reporteria', reporteriaRoutes);
 router.use('/asesor', asesorRoutes);
 router.use('/perfil', perfilRoutes);
 

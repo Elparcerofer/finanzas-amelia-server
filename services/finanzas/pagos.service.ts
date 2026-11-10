@@ -343,7 +343,7 @@ export async function opcionesPago(usuarioId: number) {
     cuentas: orden([...n.cuentas].map(([id, c]) => ({ id, nombre: c.nombre, tercero: c.tercero, tipo: c.tipo }))),
     tarjetas: orden([...n.tarjetas].map(([id, t]) => ({ id, nombre: t.nombre, tercero: t.tercero }))),
     categorias: [...n.categorias]
-      .filter(([, c]) => c.activo && c.subtipo !== 'sinClasificar')
+      .filter(([, c]) => c.activo && !c.sistema)
       .map(([id, c]) => ({ id, nombre: c.nombre, emoji: c.emoji, color: c.color, grupo: c.grupo || 'Otros' }))
       .sort((a, b) => a.grupo.localeCompare(b.grupo, 'es') || a.nombre.localeCompare(b.nombre, 'es')),
   };
