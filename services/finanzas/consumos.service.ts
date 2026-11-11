@@ -156,6 +156,14 @@ export async function simularAbonoPrestamo(usuarioId: number, deudaId: number, m
   if (!esPrestamoDetallado(d)) throw new HttpError(422, 'Solo los créditos con tabla de amortización admiten abono a capital');
   const R = d.amort!.rows;
   if (despues < 0 || despues >= R.length) throw new HttpError(422, 'Cuota fuera de rango');
+  // Las cuotas ya pagadas (y abonos previos) cambiaron la tabla: simular
+  // antes de ellas compara contra un plan que ya no existe y da ahorros
+  // negativos.
+  let ultimaPagada = 0;
+  for (const r of R) if ((d.pagosCuota[r.n] || 0) >= r.cuota - 0.01) ultimaPagada = r.n;
+  if (despues < ultimaPagada) {
+    throw new HttpError(422, `Ya pagaste hasta la cuota ${ultimaPagada}: simula el abono desde la cuota ${ultimaPagada} en adelante`);
+  }
   const tasa = tasaDe(d);
   return {
     tasa: tasa || null,

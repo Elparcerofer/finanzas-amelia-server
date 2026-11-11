@@ -128,6 +128,18 @@ export async function diaPagoTarjeta(usuarioId: number, tarjetaId: number): Prom
 }
 
 /**
+ * Acreedor de una deuda que no es tarjeta: entidad financiera
+ * (catalogos.tipo = 'banco') o empresa ('empresa'), activa.
+ */
+export async function acreedorExiste(id: number, tipo: 'banco' | 'empresa'): Promise<boolean> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT id FROM catalogos WHERE id = ? AND tipo = ? AND activo = 1',
+    [id, tipo],
+  );
+  return rows.length > 0;
+}
+
+/**
  * "¿Con qué se paga?": c:<cuenta del usuario> · t:<tarjeta del usuario> ·
  * e:<entidad activa>. true si la referencia existe y es del usuario.
  */

@@ -8,6 +8,7 @@ import {
   DatosDeudaDb,
   DatosTablaAmortizacionDb,
   DeudaFila,
+  acreedorExiste,
   diaPagoTarjeta,
   pagaConValido,
   eliminarDeudaCompleta,
@@ -127,6 +128,8 @@ export interface DeudaApi {
 
 /** Grupo de tipos de crédito cuyo acreedor es una tarjeta (ver TipoCreditoLabel.fuente en Flutter). */
 const TIPOS_FUENTE_TARJETA = new Set(['tarjeta']);
+/** Tipos cuyo acreedor es una empresa del catálogo (igual que la app). */
+const TIPOS_FUENTE_EMPRESA = new Set(['empresarial', 'suscripcion']);
 
 function tipoCuotaApiADb(tipoCuota?: string): string {
   return tipoCuota === 'variable' ? 'variable' : 'fijo';
@@ -238,6 +241,23 @@ async function datosParaDb(usuarioId: number, input: DeudaInputApi): Promise<Dat
   const acreedorId = esTarjeta ? null : Number(input.fuenteAcreedorId);
   const tarjetaCreditoId = esTarjeta ? Number(input.fuenteAcreedorId) : null;
   const categoriaId = input.categoriaId ? Number(input.categoriaId) : null;
+
+  // El acreedor debe existir y, si es tarjeta, ser del usuario (sin esto
+  // una tarjeta ajena pasaba la FK y una inexistente daba error 500).
+  if (esTarjeta) {
+    if ((await diaPagoTarjeta(usuarioId, tarjetaCreditoId!)) === undefined) {
+      throw new HttpError(400, 'La tarjeta no existe o no es tuya');
+    }
+  } else {
+    const tipoCatalogo = TIPOS_FUENTE_EMPRESA.has(input.tipo) ? 'empresa' : 'banco';
+    if (!Number.isInteger(acreedorId) || !(await acreedorExiste(acreedorId!, tipoCatalogo))) {
+      throw new HttpError(400, tipoCatalogo === 'empresa' ? 'La empresa no existe o está inactiva' : 'La entidad financiera no existe o está inactiva');
+    }
+  }
+  if (categoriaId) {
+    const existentes = await categoriasExistentes([categoriaId]);
+    if (!existentes.has(categoriaId)) throw new HttpError(400, 'La categoría no existe');
+  }
 
   if (input.modo === 'detallada' && esTarjeta) {
     return datosTarjetaDetallada(usuarioId, input, {
